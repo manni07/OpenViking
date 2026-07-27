@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, lazy, Suspense } from 'react'
 import type { ComponentProps, ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import hljs from 'highlight.js/lib/core'
-import ReactMarkdown from 'react-markdown'
+import ReactMarkdown, { defaultUrlTransform } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { X, Pencil, Save, XCircle, Loader2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -315,12 +315,127 @@ function resolveMarkdownAssetTarget(
   return { kind: 'viking', value: vikingUri }
 }
 
-function resolveMarkdownAssetUrl(assetPath: string, fileUri: string): string {
-  const target = resolveMarkdownAssetTarget(assetPath, fileUri)
-  if (target.kind === 'viking') {
-    return toDownloadUrl(target.value)
+function decodeUriForSchemeCheck(value: string): string {
+  let decoded = value
+  // Nested percent encoding must not turn a dangerous scheme into a relative
+  // Viking path after the browser performs its own URL decoding.
+  for (let index = 0; index < 4; index += 1) {
+    const next = safeDecodeUri(decoded)
+    if (next === decoded) {
+      break
+    }
+    decoded = next
   }
-  return target.value
+  return decoded
+}
+
+function markdownUrlScheme(value: string): string | null {
+  const normalized = Array.from(value)
+    .filter((character) => {
+      const code = character.charCodeAt(0)
+      return code > 0x20 && code !== 0x7f
+    })
+    .join('')
+  const match = /^([a-z][a-z0-9+.-]*):/i.exec(normalized)
+  return match ? match[1].toLowerCase() : null
+}
+
+function transformMarkdownUrl(url: string): string {
+  const decodedForScheme = decodeUriForSchemeCheck(url.trim())
+  const scheme = markdownUrlScheme(decodedForScheme)
+
+  if (
+    scheme === 'http' ||
+    scheme === 'https' ||
+    scheme === 'mailto' ||
+    scheme === 'tel'
+  ) {
+    return decodedForScheme
+  }
+  if (scheme === 'viking' && /^viking:\/\//i.test(decodedForScheme)) {
+    return `${vikingPrefix}${decodedForScheme.slice(decodedForScheme.indexOf('://') + 3)}`
+  }
+
+  // Keep react-markdown's maintained default policy for relative URLs and
+  // images. Only the application-specific Viking scheme needs an exception.
+  return defaultUrlTransform(url)
+}
+
+/**
+ * Resolves a Markdown link to either a known-safe external target or a
+ * Viking download URL. A null result is deliberately rendered without href.
+ */
+export function resolveMarkdownLinkUrl(
+  assetPath: string,
+  fileUri: string,
+): string | null {
+  const trimmed = assetPath.trim()
+  if (!trimmed) {
+    return null
+  }
+  if (trimmed.startsWith('#')) {
+    return trimmed
+  }
+
+  const decodedForScheme = decodeUriForSchemeCheck(trimmed)
+  const scheme = markdownUrlScheme(decodedForScheme)
+  if (scheme) {
+    if (
+      scheme === 'http' ||
+      scheme === 'https' ||
+      scheme === 'mailto' ||
+      scheme === 'tel'
+    ) {
+      return decodedForScheme
+    }
+    if (scheme === 'viking' && /^viking:\/\//i.test(decodedForScheme)) {
+      return toDownloadUrl(
+        `${vikingPrefix}${decodedForScheme.slice(decodedForScheme.indexOf('://') + 3)}`,
+      )
+    }
+    return null
+  }
+
+  // Network-path references are external URLs without a scheme. Do not let
+  // them inherit a Viking path or the browser's current protocol.
+  if (
+    decodedForScheme.startsWith('//') ||
+    decodedForScheme.startsWith('\\\\')
+  ) {
+    return null
+  }
+
+  // react-markdown percent-encodes URLs it passes to custom components.
+  // Decode once for a local Viking path so the API query serializer can
+  // encode it exactly once.
+  return toDownloadUrl(
+    resolveRelativeVikingUri(fileUri, safeDecodeUri(trimmed)),
+  )
+}
+
+export function MarkdownLink({
+  children,
+  fileUri,
+  href,
+}: {
+  children: ReactNode
+  fileUri: string
+  href?: string
+}) {
+  const resolvedHref = href ? resolveMarkdownLinkUrl(href, fileUri) : null
+  const isExternal = resolvedHref
+    ? /^(https?:|mailto:|tel:)/i.test(resolvedHref)
+    : false
+
+  return (
+    <a
+      href={resolvedHref ?? undefined}
+      target={isExternal ? '_blank' : undefined}
+      rel={isExternal ? 'noreferrer noopener' : undefined}
+    >
+      {children}
+    </a>
+  )
 }
 
 function MarkdownImage({
@@ -1462,7 +1577,7 @@ export function FilePreview({
               <article className="prose prose-sm max-w-none break-words dark:prose-invert dark:prose-pre:bg-muted-foreground/20">
                 <ReactMarkdown
                   remarkPlugins={[remarkGfm]}
-                  urlTransform={(url) => url}
+                  urlTransform={transformMarkdownUrl}
                   components={{
                     ...markdownComponents,
                     img: ({ src, alt }) => (
@@ -1472,23 +1587,14 @@ export function FilePreview({
                         fileUri={file.uri}
                       />
                     ),
-                    a: ({ href, children }) => {
-                      const resolvedHref = href
-                        ? resolveMarkdownAssetUrl(String(href), file.uri)
-                        : String(href || '')
-                      const isExternal = /^(https?:|mailto:|tel:)/i.test(
-                        resolvedHref,
-                      )
-                      return (
-                        <a
-                          href={resolvedHref}
-                          target={isExternal ? '_blank' : undefined}
-                          rel={isExternal ? 'noreferrer noopener' : undefined}
-                        >
-                          {children}
-                        </a>
-                      )
-                    },
+                    a: ({ href, children }) => (
+                      <MarkdownLink
+                        href={href ? String(href) : undefined}
+                        fileUri={file.uri}
+                      >
+                        {children}
+                      </MarkdownLink>
+                    ),
                   }}
                 >
                   {displayContent || emptyFileText}

@@ -251,7 +251,7 @@ class ServerConfig(BaseModel):
     auth_mode: Optional[str] = None  # If None, auto-detect based on root_api_key
     root_api_key: Optional[str] = None
     profile_enabled: bool = False
-    cors_origins: List[str] = Field(default_factory=lambda: ["*"])
+    cors_origins: List[str] = Field(default_factory=list)
     with_bot: bool = False  # Enable Bot API proxy to Vikingbot
     bot_api_url: str = "http://localhost:18790"  # Vikingbot OpenAPIChannel URL (default port)
     encryption_enabled: bool = False  # Whether file-level AES encryption is enabled
@@ -264,6 +264,7 @@ class ServerConfig(BaseModel):
     # > listen-address fallback. Set this (or the env var) when the server runs
     # behind a reverse proxy that does not forward X-Forwarded-* headers.
     public_base_url: Optional[str] = None
+    webdav_max_body_bytes: int = Field(default=16 * 1024 * 1024, ge=1)
     upload_signed_ttl_seconds: int = 600
     temp_upload: TempUploadConfig = Field(default_factory=TempUploadConfig)
     user_config_defaults: UserConfig = Field(default_factory=UserConfig)
