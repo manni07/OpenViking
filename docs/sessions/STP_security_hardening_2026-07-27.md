@@ -4,11 +4,11 @@
 **Arbeitszweig:** `agent-workflow/20260727-security-hardening`
 **Basis-Commit:** `60ef45d4c3a7d07ceb1df4e9d7dde7a14449ac50` (`origin/main`)
 **Arbeitsbaum:** `/Volumes/ExtremePro/projects/OpenViking-agent-worktrees/20260727-security-hardening`
-**Ziel:** P0-P2-Härtung aus `docs/audit/2026-07-27-security-audit-main.md`; keine Produktion, kein Server- oder Rechnerneustart.
+**Ziel:** P0-P2-Härtung aus `docs/audit/2026-07-27-security-audit-main.md`; kein Server- oder Rechnerneustart.
 
 ## Übergabestatus
 
-Die Änderungssätze implementieren die geplanten P0/P1-Maßnahmen: Markdown-Link-Sanitizing im Web Studio und Graph-HTML, ein 16-MiB-WebDAV-Body-Limit, fail-closed Regeln für öffentliche CORS-/Basis-URL-Konfiguration, kompatible Abhängigkeitsaktualisierungen sowie eine neue CI für Dependency-Audits. Die wesentlichen Dossiers befinden sich hier:
+Die Änderungssätze implementieren die geplanten P0/P1-Maßnahmen: Markdown-Link-Sanitizing im Web Studio und Graph-HTML, ein 16-MiB-WebDAV-Body-Limit, fail-closed Regeln für öffentliche CORS-/Basis-URL-Konfiguration, kompatible Abhängigkeitsaktualisierungen sowie eine neue CI für Dependency-Audits. Commit `45411cd2` wurde im Fork als Draft-PR #1 veröffentlicht. Alle dafür ausgelösten PR-Checks inklusive Dependency-Audit waren erfolgreich. Danach wurden die Helm- und Beispielkonfigurationen von CORS-Wildcards auf explizite Betreiberwerte beziehungsweise einen fail-closed Leerwert korrigiert; dieser Nachtrag benötigt seine eigenen PR-Checks vor dem Merge.
 
 | Artefakt | Zweck |
 |---|---|
@@ -67,6 +67,19 @@ Vor einem Browser-E2E-Lauf muss eine nicht-sekrete, gültige `ov.conf` vorhanden
 
 Bei einem neuen Advisory, einer abgelaufenen Ausnahme oder einem Mismatch des Baseline-Verifiers: **anhalten**, Befund und Pfad speichern, keine breite Ignore-Regel einführen und die Kompatibilitätsentscheidung separat dokumentieren.
 
+## Merge- und Deployment-Gate
+
+Für PR #1 darf nach erfolgreichem Check des Nachtrags gemergt werden. Ein
+Deployment in eine reale Umgebung ist **nicht** durch den Merge impliziert:
+in diesem Arbeitskontext ist kein Docker-Daemon erreichbar, kein Kubernetes-
+Kontext gesetzt und keine nicht-sekrete Zielkonfiguration vorhanden. Vor einer
+realen Bereitstellung müssen Betreiber mindestens die Zielumgebung, konkrete
+HTTPS-Origin(s), `public_base_url`, eine Secret-Referenz für `root_api_key`,
+Persistenzpfad/-claim sowie einen wartungsfreien Anwendungsweg bestätigen.
+Danach vor einer Veränderung nur die vorhandene Deployment-Plattform
+read-only inventarisieren und den Health-/Proxy-Test aus dem Testdossier
+ausführen. Kein Neustart ist durch dieses Protokoll erlaubt.
+
 ## Sicherer Git-Hand-off
 
 ```sh
@@ -76,4 +89,4 @@ git diff --name-only
 git log --oneline --decorate -5
 ```
 
-Erst nach Prüfung dieser Ausgaben nur die Dateien dieses Security-Hardening-Zweigs stagen, committen und auf `origin` pushen. Einen Draft-PR erst nach dem tatsächlichen Push erstellen. Dieser STP enthält keine Behauptung, dass Push, PR, CI oder Deployment bereits stattgefunden haben.
+Erst nach Prüfung dieser Ausgaben nur die Dateien dieses Security-Hardening-Zweigs stagen, committen und auf `origin` pushen. Den aktualisierten PR-Check abwarten; erst dann den Draft-Status entfernen und mergen. Dieser STP behauptet kein Deployment.
