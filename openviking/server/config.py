@@ -251,19 +251,18 @@ class ServerConfig(BaseModel):
     auth_mode: Optional[str] = None  # If None, auto-detect based on root_api_key
     root_api_key: Optional[str] = None
     profile_enabled: bool = False
-    cors_origins: List[str] = Field(default_factory=lambda: ["*"])
+    cors_origins: List[str] = Field(default_factory=list)
     with_bot: bool = False  # Enable Bot API proxy to Vikingbot
     bot_api_url: str = "http://localhost:18790"  # Vikingbot OpenAPIChannel URL (default port)
     encryption_enabled: bool = False  # Whether file-level AES encryption is enabled
     api_key_hashing_enabled: bool = False  # Whether API key Argon2id hashing is enabled (default: false, rely on file encryption)
     observability: ObservabilityConfig = Field(default_factory=ObservabilityConfig)
     usage_reporter: UsageReporterConfig = Field(default_factory=UsageReporterConfig)
-    # Public-facing base URL emitted in MCP-issued upload instructions. See
-    # ``openviking.server.mcp_endpoint._resolve_public_base_url`` for the full
-    # resolution chain: env var > this field > X-Forwarded-Host/Proto > Host header
-    # > listen-address fallback. Set this (or the env var) when the server runs
-    # behind a reverse proxy that does not forward X-Forwarded-* headers.
+    # Public-facing base URL emitted in MCP-issued upload instructions. A
+    # non-loopback bind must set this (or OPENVIKING_PUBLIC_BASE_URL) to a
+    # canonical HTTPS origin; it never trusts request headers in that mode.
     public_base_url: Optional[str] = None
+    webdav_max_body_bytes: int = Field(default=16 * 1024 * 1024, ge=1)
     upload_signed_ttl_seconds: int = 600
     temp_upload: TempUploadConfig = Field(default_factory=TempUploadConfig)
     user_config_defaults: UserConfig = Field(default_factory=UserConfig)
