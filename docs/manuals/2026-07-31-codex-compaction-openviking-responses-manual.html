@@ -125,19 +125,19 @@ vlm.probe_responses_compaction_capability(
       <tr><td>A/B-Corpus 20 real + 10 synthetisch</td><td>HOLD</td></tr>
       <tr><td>Exakter Endpoint-Probe und Canary</td><td>HOLD</td></tr>
       <tr><td>OpenViking MCP Health + read-only Suche</td><td>PASS; kein Provider-Capability-Beleg</td></tr>
-      <tr><td>Legacy vollständig grün</td><td>HOLD</td></tr>
-      <tr><td>Legacy-VLM-H3 Security</td><td>89/100, 0C/1H/1M; Source-Unlock verweigert</td></tr>
+      <tr><td>Gezielter Legacy-VLM-Scope</td><td>272/272 PASS; Offline-HOLD aufgehoben</td></tr>
+      <tr><td>Breite Legacy-Matrix</td><td>364 PASS plus 8 separate VolcEngine-Baselinefehler</td></tr>
+      <tr><td>Legacy-VLM Security Rev2</td><td>96/100, 0C/0H/1M; PASS</td></tr>
       <tr><td>Aktivierung oder Default-Promotion</td><td>Nicht erfolgt</td></tr>
     </tbody>
   </table>
-  <p>Offline wurden 102/102 neue Kandidatentests bestanden. Der separate finale
-    Legacy-VLM-H3-Security-Review endet nach drei Revisionen bei 89/100 mit
-    0 Critical, 1 High und 1 Medium. H2 bis H5 sind geschlossen; H1, der exakte
-    Konstantenvertrag für markierte VikingBot-Fehler, bleibt offen. Deshalb ist
-    der Source-Unlock verweigert; es gibt in diesem Lauf keine weitere Revision
-    oder H1-Implementierung. OpenViking MCP Health und ein echter read-only
-    <code>search_experience</code>-Aufruf sind PASS, belegen aber keine
-    Provider-Capability. Der Live-Test bleibt auf Wunsch des Users vertagt.</p>
+  <p>Ein neuer, vom User autorisierter Offline-Zyklus schloss H1 sowie die in
+    Security Rev1 gefundenen H6-/M2-Lücken test-first. Fünf direkte
+    Angriffs-Tests, der 272-Fall-Zielsatz und 122 Responses-/Hook-Tests sind
+    grün. Security Rev2 endet bei 96/100 mit 0 Critical, 0 High und 1 Medium;
+    der Offline-HOLD ist aufgehoben. Der Live-Provider-Test bleibt auf Wunsch
+    des Users vertagt. OpenViking MCP Health und read-only Suche sind weiterhin
+    nur Betriebs-, nicht Provider-Capability-Belege.</p>
 
   <h2>10. Weiterführende Dokumente</h2>
   <ul>

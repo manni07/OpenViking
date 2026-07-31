@@ -3,7 +3,7 @@
 ## Codex-Compaction und OpenViking Responses State
 
 Stand: 2026-07-31
-Status: Responses-Kandidat offline verifiziert; Legacy-VLM-H3-Source, Aktivierung und Live auf HOLD
+Status: Offline Legacy-VLM HOLD aufgehoben; Live M1, Aktivierung und Promotion auf HOLD
 Basis: `60ef45d4c3a7d07ceb1df4e9d7dde7a14449ac50`
 
 ## 1. Ergebnis
@@ -367,3 +367,24 @@ OpenViking MCP Health und ein echter read-only `search_experience`-Aufruf sind
 PASS. Das beweist MCP-Betriebszugriff, nicht Responses-/Compaction-Fähigkeit des
 Providers. Der User hat den Live-Provider-Test vertagt; M1, Aktivierung, Restart
 und Merge bleiben HOLD.
+
+## 13. User-autorisierter Offline-HOLD-Lift
+
+Nach dem oben historisch dokumentierten finalen HOLD autorisierte der User
+einen neuen Offline-Zyklus. Architektur: 97/100 Design, 96/100 Interfaces,
+100/100 Scope. H1 war zunächst direkt RED; das Pre-Source-Security-Gate bestand
+mit 93/100, 0C/0H. Die Implementierungssimulation erreichte 96,6 Prozent bei
+mindestens 95 Prozent je Kriterium. Der erste Source-Stand bestand 267/267,
+erhielt aber in Security Rev1 wegen H6 ein VETO (86/100, 0C/1H/2M).
+
+H6 verlangt für nicht instanzmarkierbare Exceptions einen opaken,
+klassenmarkierten Wrapper mit dem identischen Original als `__cause__`. M2
+stoppt beim 257. Aggregate-Kind fail-closed, bevor Kind 258 gelesen wird. Nach
+fünf direkten RED-Tests bestanden 5/5, 189/189 und final 272/272 ohne Fail,
+Skip oder Xfail.
+Testsimulation: 98 Prozent, Minimum 96. Security Rev2: 96/100, 0C/0H/1M, PASS;
+`offline_hold_lifted=true`.
+
+Damit ist ausschließlich der **Offline Legacy-VLM HOLD aufgehoben**. **Live M1
+bleibt HOLD**; kein Live-Test, keine Aktivierung, Promotion, kein Merge oder
+Restart erfolgte.

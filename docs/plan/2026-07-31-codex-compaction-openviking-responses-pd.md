@@ -3,8 +3,7 @@
 ## Optimierung von Codex-Compaction und OpenViking Responses
 
 Stand: 2026-07-31
-Status: Responses-Kandidat offline verifiziert; Legacy-VLM-H3-Source, Live- und
-Promotions-Gates auf HOLD
+Status: Offline Legacy-VLM HOLD aufgehoben; Live M1 und Promotions-Gates auf HOLD
 
 ## 1. Ziel und Erfolgskriterien
 
@@ -361,3 +360,19 @@ OpenViking MCP Health und read-only `search_experience` sind PASS, jedoch kein
 Provider-Capability-Nachweis. Der User hat den Live-Test vertagt. A/B, M1,
 Source/Testcode, Restart, Merge, Aktivierung und Promotion bleiben offen oder
 gesperrt wie zuvor.
+
+## 14. Neuer QWF-Zyklus zur Offline-HOLD-Aufhebung
+
+Der User autorisierte nach dem alten finalen HOLD einen neuen Offline-Zyklus:
+H1 test-first → Architektur/Security → vier Sourcefiles → neue Befunde
+test-first → gezielte und breite Evidenz getrennt. Architektur 97/96/100,
+Pre-Source Security 93/100 bei 0C/0H und Implementierungssimulation 96,6
+Prozent (Minimum 95) bestanden. Der erste Stand erreichte 267/267, erhielt aber
+wegen H6 bei 86/100, 0C/1H/2M ein VETO.
+
+Fünf H6-Tests wechselten nach opakem klassenmarkiertem Wrapper, Original-
+`__cause__` und fail-closed Stopp beim 257. Kind vor dem Lesen von Kind 258 von
+RED zu 5/5 GREEN. Zusätzlich bestanden
+189/189 und 272/272. Testsimulation: 98 Prozent, Minimum 96. Security Rev2:
+96/100, 0C/0H/1M, PASS. **Offline Legacy-VLM HOLD aufgehoben; Live M1 bleibt
+HOLD.** Kein Live-Aufruf, keine Aktivierung, Promotion, kein Merge oder Restart.

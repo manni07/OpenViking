@@ -76,3 +76,20 @@ Für Legacy-VLM-H3 wurden Vertrags-Tests ergänzt und mit
 Produktionsdatei geändert. Es erfolgten kein Restart, keine Aktivierung, kein
 Merge und keine Promotion. STP und Open Items werden separat vom zuständigen
 Session-Transfer-Workflow gepflegt.
+
+## 11. Ein neuer autorisierter Zyklus darf einen alten HOLD sauber ablösen
+
+Der spätere User-Auftrag autorisierte einen neuen, unabhängigen Offline-Zyklus.
+H1 sowie die neu gefundenen H6-/M2-Lücken wurden test-first geschlossen. Der
+gezielte Satz bestand 272/272; Security Rev2 bestand mit 96/100, 0C/0H/1M.
+Damit ist der Offline-HOLD aufgehoben, ohne das alte VETO umzudeuten. Der Live-
+HOLD bleibt bestehen.
+
+## 12. Fail-closed Markierung muss einen Ersatz zurückgeben dürfen
+
+Nicht jede Exception erlaubt Instanzattribute. Eine Markierungsfunktion darf
+deshalb nicht nur `setattr` ausführen: Sie braucht einen opaken,
+klassenmarkierten Fallback mit Originalexception als `__cause__`, und jeder
+Aufrufer muss das zurückgegebene Objekt behalten. Bei Aggregate-Grenzen reicht
+ein vertrauensvolles `len()` nicht; die Schranke muss in jeder Iteration erneut
+erzwungen werden.

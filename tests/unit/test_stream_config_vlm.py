@@ -812,6 +812,34 @@ class TestStreamingReducerContract:
         assert stream.close_count == 1
 
     @pytest.mark.asyncio
+    @pytest.mark.parametrize("mode", ["sync", "async"])
+    async def test_assignment_rejecting_error_is_wrapped_after_exactly_one_cleanup(self, mode):
+        class MarkerAssignmentRejectingError(RuntimeError):
+            def __setattr__(self, name, value):
+                if name == "_openviking_vlm_non_retryable":
+                    raise RuntimeError("instance marker assignment denied")
+                super().__setattr__(name, value)
+
+        vlm = OpenAIVLM({"api_key": "sk-test"})
+        original = MarkerAssignmentRejectingError("SENTINEL-STREAM-SECRET")
+        stream_type = ScriptedSyncStream if mode == "sync" else ScriptedAsyncStream
+        stream = stream_type([MockChunk(content="partial"), original])
+        fake_logger = MagicMock()
+
+        with patch("openviking.models.vlm.backends.openai_vlm.logger", fake_logger):
+            with pytest.raises(BaseException) as raised:
+                if mode == "sync":
+                    vlm._process_streaming_response(stream)
+                else:
+                    await vlm._process_streaming_response_async(stream)
+
+        assert stream.close_count == 1
+        assert raised.value is not original
+        assert raised.value.__cause__ is original
+        assert _is_marked(raised.value) is True
+        assert "SENTINEL-STREAM-SECRET" not in repr((raised.value, fake_logger.mock_calls))
+
+    @pytest.mark.asyncio
     @pytest.mark.parametrize("body", ["success", "primary", "body-cancel"])
     async def test_async_cleanup_uses_one_task_and_deterministic_cancellation_priority(self, body):
         vlm = OpenAIVLM({"api_key": "sk-test"})

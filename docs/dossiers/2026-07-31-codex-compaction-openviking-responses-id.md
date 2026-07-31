@@ -3,7 +3,7 @@
 ## Codex-Compaction und OpenViking Responses State
 
 Stand: 2026-07-31
-Status: Responses-Kandidat offline verifiziert; Legacy-VLM-H3-Source und Live-Freigabe HOLD
+Status: Offline Legacy-VLM HOLD aufgehoben; Live M1 bleibt HOLD
 Basis-Commit: `60ef45d4c3a7d07ceb1df4e9d7dde7a14449ac50`
 
 ## 1. Lieferergebnis
@@ -562,3 +562,27 @@ MCP Health und echter read-only `search_experience`-Aufruf sind PASS. Diese
 Evidenz betrifft den OpenViking-MCP-Zugriff, nicht die Codex-Responses-
 Capability. Der User hat den Live-Provider-Test vertagt. Kein Produktionsdiff,
 Live-Request, Restart, Merge, Aktivierung oder Promotion folgt aus diesem ID.
+
+## 13. Implementierungsnachtrag: Offline-HOLD-Lift
+
+Ein neuer user-autorisierter Zyklus gab nach Architektur 97/96/100 und
+Pre-Source Security 93/100, 0C/0H nur die vier bestehenden Sourcegrenzen frei:
+`openai_vlm.py`, `model_retry.py`, `base.py` und `vlm_adapter.py`. Der erste
+Stand bestand 267/267, blieb nach Security Rev1 (86/100, 0C/1H/2M) wegen H6
+gesperrt. H6 wurde test-first geschlossen: Ein opaker, klassenmarkierter Wrapper
+bindet eine nicht instanzmarkierbare Originalexception unverändert als
+`__cause__`; M2 beendet die Aggregattraversierung beim 257. Kind fail-closed,
+bevor Kind 258 gelesen wird.
+
+Ein ungültiger Test erwartete für einen `AllCredentialsFailedError`
+`RuntimeError`, obwohl zugleich Objektidentität verlangt wurde. Korrigiert wurde
+nur die erwartete konkrete Exceptionklasse, nicht die Produktion. Final: H6
+5/5, Ausschnitt 189/189,
+Sechs-Dateien-Matrix 272/272 ohne Fail/Skip/Xfail; Testsimulation 98 Prozent,
+Minimum 96; Security Rev2 96/100, 0C/0H/1M, PASS.
+
+Der finale Breitscope wurde durch Worker und Supervisor mit 364 PASS plus exakt
+acht vorbestehenden VolcEngine-Konstruktorfehlern reproduziert. Keine Breitsuite
+wird als vollständig grün bezeichnet; keine numerische Coverage oder
+Mutation-Coverage wird behauptet. **Offline Legacy-VLM HOLD aufgehoben; Live M1
+bleibt HOLD.**
