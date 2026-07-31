@@ -30,7 +30,7 @@ Live-Kriterien sind offen und bleiben fail-closed.
 | 2 | Baseline und Capability-Grenze | Baseline-Fehler reproduziert; Live-Probe nicht autorisiert |
 | 3 | Lokale A/B-Messung | **HOLD:** Corpus 20 real + 10 synthetisch fehlt |
 | 4 | State-Vertrag | Implementiert und getestet |
-| 5 | Tests | 92 neue Tests bestanden |
+| 5 | Tests | 102 neue Tests bestanden |
 | 6 | Adapter und Config | Implementiert; Default bleibt aus |
 | 7 | Canary | **HOLD:** potenziell kostenpflichtig, Genehmigung erforderlich |
 | 8 | Promotion | **HOLD:** keine Freigabeevidenz |
@@ -48,7 +48,8 @@ Erledigt:
 - globale Codex-Dateien vorab gesichert und SHA-256-verifiziert;
 - quellkontrollierter Hook mit privaten Rechten, atomarem Schreiben,
   komponentenweiser Symlink-Prüfung, fester Ausgabe und Ressourcenlimits;
-- 24 Hook-Tests bestanden.
+- 30 Hook-Tests bestanden, einschließlich Directory-FD-, Deadline- und
+  Retention-Grenzen.
 
 Nicht durchgeführt:
 
@@ -82,7 +83,8 @@ Erledigt:
 - Commit-on-complete, Tool exactly once, Bindings, TTL und Limits;
 - OAuth-Origin- und Single-Credential-Grenze;
 - opt-in Konfiguration;
-- 68 State-/Adaptertests bestanden.
+- 72 State-/Adaptertests bestanden, einschließlich stabiler Credential-Slots
+  ohne `client_id` und cancellation-sicherem Cleanup.
 
 ### Phase 3 — Abschlussdokumentation
 
@@ -94,15 +96,18 @@ Erledigt:
 
 Nicht durchgeführt:
 
-- Commit, Push, PR, Merge, Aktivierung oder Promotion.
+- Push, PR, Merge, Aktivierung oder Promotion.
+
+Die Offline-Implementierung wurde gezielt auf der isolierten Branch committet;
+dies ändert weder globale Codex-Dateien noch einen laufenden Dienst.
 
 ## 4. Verifikation
 
 | Gate | Ist | Status |
 |---|---:|---|
-| Neue Tests | 92/92 | PASS |
-| Core kombiniert | 121/122; 1 Baseline-Fehler | CANDIDATE PASS / LEGACY HOLD |
-| Erweitert | 130/142; 12 Baseline-Fehler | CANDIDATE PASS / LEGACY HOLD |
+| Neue Tests | 102/102 | PASS |
+| Core kombiniert | 131/132; 1 Baseline-Fehler | CANDIDATE PASS / LEGACY HOLD |
+| Erweitert | 140/152; 12 Baseline-Fehler | CANDIDATE PASS / LEGACY HOLD |
 | Ruff | Check und Format PASS | PASS |
 | Compileall | PASS | PASS |
 | Diff-Whitespace | PASS | PASS |
@@ -151,7 +156,9 @@ Der Security-Re-Review Revision 2 erreichte 95,6 % aggregiert und mindestens
 91 % je Kriterium. Er meldet keine offenen Critical-/High-Befunde und hebt das
 Offline-Kandidaten-Veto auf. Wegen Nichtverfügbarkeit des geforderten aktuellen
 Claude Opus wurde Codex vorläufig als Ersatzmodell eingesetzt. Die drei
-verbleibenden Medium-Befunde bleiben offen.
+Medium-Befunde wurden in den Offline-Follow-ups `325e5cff` und `0556a9aa`
+geschlossen und mit 102/102 Kandidatentests verifiziert; vor Aktivierung bleibt
+eine unabhängige Revalidierung erforderlich.
 
 ## 8. Nächste autorisierte Entscheidung
 

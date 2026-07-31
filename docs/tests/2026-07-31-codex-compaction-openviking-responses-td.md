@@ -22,9 +22,9 @@ Die Tests kodieren die Sicherheits- und Kontinuitätsgründe der Änderung:
 
 | Datei | Fokus | Ergebnis |
 |---|---|---:|
-| `tests/unit/test_codex_compaction_hook.py` | Rechte, Symlinks, Timeout, Korrelation, Parallelität, Injection | 24 PASS |
-| `tests/unit/test_codex_responses_state.py` | State, Streaming, Compaction, Tool-Calls, Limits, Config | 68 PASS |
-| **Gesamt neu** |  | **92 PASS** |
+| `tests/unit/test_codex_compaction_hook.py` | Rechte, Directory-FDs, Deadline, Retention, Korrelation, Parallelität, Injection | 30 PASS |
+| `tests/unit/test_codex_responses_state.py` | State, Streaming, Cleanup, Credential-Bindung, Compaction, Tool-Calls, Limits, Config | 72 PASS |
+| **Gesamt neu** |  | **102 PASS** |
 
 ## 3. Hook-Abdeckung
 
@@ -37,7 +37,10 @@ Die Hook-Suite prüft:
 - Symlink-Ablehnung am Ziel und in jeder Pfadkomponente von `CODEX_HOME` bis
   `state/compaction-hooks`;
 - Eigentümer- und Verzeichnisinvarianten;
-- 64-KiB-Eingabelimit und interne Fünf-Sekunden-Grenze;
+- keine erneute Pfadauflösung nach einer Directory-FD-verankerten Prüfung;
+- 64-KiB-Eingabelimit und erzwungene externe Fünf-Sekunden-Deadline;
+- höchstens 256 Records, 24 Stunden TTL, maximal 1024 untersuchte Einträge und
+  idempotente Retention bei Parallelzugriffen;
 - PreCompact/SessionStart/PostCompact-Korrelation;
 - keine behauptete semantische Transcript-Vollständigkeit.
 
@@ -60,6 +63,10 @@ Die State-Suite prüft:
 - keine sichtbaren oder opaken Tool-Inhalte in State-spezifischen Traces;
 - threadsichere Singleton-Initialisierung der Adapter;
 - Credential-I/O außerhalb des Async-Event-Loops;
+- stabile Credential-Slot-Bindung bei wechselndem Resolver-Owner auch ohne
+  `client_id`;
+- vollständiges Stream- und Client-Cleanup trotz wiederholter Cancellation oder
+  Fehler im ersten Close;
 - maximal 4096 retained Tool-Call-IDs, 512 Bytes je ID und Einrechnung in die
   State-Byte-Grenze;
 - `store=false` und Ablehnung von Conversations,
@@ -73,7 +80,7 @@ Die State-Suite prüft:
 ### 5.1 Neue Suiten
 
 ```text
-92 passed, 4 warnings
+102 passed, 4 warnings
 ```
 
 Bewertung: Kandidaten-Gate PASS; keine Skips oder Xfails.
@@ -87,8 +94,8 @@ Enthalten:
 - `tests/models/vlm/test_timeout_config.py`.
 
 ```text
-122 collected
-121 passed
+132 collected
+131 passed
 1 failed
 4 warnings
 ```
@@ -107,8 +114,8 @@ denselben einen Fehler. Das ist keine Kandidatenregression, aber ein Legacy-HOLD
 Zusätzlich enthalten: `tests/unit/test_stream_config_vlm.py`.
 
 ```text
-142 collected
-130 passed
+152 collected
+140 passed
 12 failed
 4 warnings
 ```
@@ -121,7 +128,7 @@ vorbestehend bestätigt. Die Legacy-Suite ist trotzdem nicht vollständig grün.
 
 ```text
 ruff check:        PASS
-ruff format --check: 6 files already formatted
+ruff format --check: 8 files already formatted
 python -m compileall -q: PASS
 git diff --check:  PASS
 ```
@@ -182,7 +189,11 @@ Der Security-Re-Review Revision 2 meldet keine offenen Critical-/High-Befunde
 und hebt das Offline-Kandidaten-Veto auf. Score: 95,6 % aggregiert, mindestens
 91 % je Kriterium. Die Bewertung ist vorläufig, weil das geforderte aktuelle
 Claude Opus nicht verfügbar war und Codex als Ersatzmodell diente. Die drei
-Medium-Restbefunde sind im Open-Item-Bericht erfasst.
+Medium-Restbefunde wurden im Follow-up-Commit
+`325e5cff3895036a2fc0e8a0a93131e77f7c9d0d` geschlossen; der Randfall aus
+Cancellation plus Close-Fehler wurde mit `0556a9aac049d2563893e1abe4068c0260024542`
+ergänzt. Die formale Bewertung bleibt wegen des
+Ersatzreviewers vorläufig.
 
 ## 9. Reproduktion
 

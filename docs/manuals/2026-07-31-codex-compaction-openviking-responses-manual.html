@@ -99,8 +99,9 @@ vlm.probe_responses_compaction_capability(
   <p>Der Hook liegt unter
     <code>tools/codex_compaction_hooks/codex_compaction_hook.py</code>. Seine
     Offline-Tests belegen private Rechte, atomare Dateien, Eigentümer- und
-    komponentenweise Symlink-Prüfungen, begrenzte Eingabe/Laufzeit,
-    Parallelität und konstante prompt-sichere Ausgabe.</p>
+    komponentenweise Symlink-Prüfungen, Directory-FD-Verankerung, eine
+    erzwungene Deadline, begrenzte Retention, Parallelität und konstante
+    prompt-sichere Ausgabe.</p>
   <p>Dieses Manual enthält absichtlich keine Installationsanweisung. Eine globale
     Installation ist eine gesonderte Aktivierungsentscheidung und muss die
     verifizierten Backups respektieren.</p>
@@ -126,13 +127,14 @@ vlm.probe_responses_compaction_capability(
       <tr><td>Aktivierung oder Default-Promotion</td><td>Nicht erfolgt</td></tr>
     </tbody>
   </table>
-  <p>Offline wurden 92/92 neue Tests bestanden. Der Security-Re-Review Revision
+  <p>Offline wurden 102/102 neue Tests bestanden. Der Security-Re-Review Revision
     2 meldet keine offenen Critical-/High-Befunde und hebt das
-    Offline-Kandidaten-Veto auf. Drei Medium-Risiken bleiben: eine nicht
-    garantierte <code>client_id</code> im Resolver, ungeschirmtes Async-Cleanup
-    bei wiederholter Cancellation und TOCTOU-/Deadline-/Retention-Risiken einer
-    späteren Hook-Aktivierung. Der Review ist vorläufig, weil das geforderte
-    aktuelle Claude Opus nicht verfügbar war und Codex als Ersatzmodell diente.</p>
+    Offline-Kandidaten-Veto auf. Die drei Medium-Risiken wurden offline
+    geschlossen: stabile Credential-Slots auch ohne <code>client_id</code>,
+    cancellation-sicheres Async-Cleanup sowie Directory-FD-, Deadline- und
+    Retention-Härtung des Hooks. Der Review ist vorläufig, weil das geforderte
+    aktuelle Claude Opus nicht verfügbar war und Codex als Ersatzmodell diente;
+    eine unabhängige Revalidierung bleibt vor Aktivierung erforderlich.</p>
 
   <h2>10. Weiterführende Dokumente</h2>
   <ul>

@@ -3,13 +3,15 @@
 **Status:** OFFLINE IMPLEMENTATION VERIFIED / WORKFLOW HOLD / NOT ACTIVATED
 **Date:** 2026-07-31
 **Workflow:** `$tccode`, thorough, critical; Agent Workflow v4
-**Current gate:** Offline implementation and local contract tests complete;
-provider capability, A/B, canary, documentation, and promotion gates remain HOLD
+**Current gate:** Offline implementation, Security-Medium-Follow-up and local
+contract tests complete; provider capability, A/B, canary, independent
+revalidation and promotion gates remain HOLD
 
 This restartable handoff records the final evidence available in this worktree.
 The source-controlled hook candidate and opt-in Responses state adapter are
 implemented and pass their deterministic offline suites. They are not installed,
-activated, deployed, committed, pushed, merged, canary-tested, or promoted. The
+activated, deployed, pushed, merged, canary-tested, or promoted. The isolated
+branch contains targeted local commits; no global state was changed. The
 private Codex endpoint capability probe and local compaction comparison matrix
 were deliberately not run.
 
@@ -44,7 +46,7 @@ The Quick-Win-First order is:
 | Branch | `agent-workflow/20260731-codex-compaction-responses` |
 | Base commit | `60ef45d4c3a7d07ceb1df4e9d7dde7a14449ac50` |
 | Initial worktree `HEAD` | `60ef45d4c3a7d07ceb1df4e9d7dde7a14449ac50` |
-| Final evidence `HEAD` | `60ef45d4c3a7d07ceb1df4e9d7dde7a14449ac50` with uncommitted worktree changes |
+| Offline-security code `HEAD` | `0556a9aac049d2563893e1abe4068c0260024542` |
 | Main checkout | `/Volumes/ExtremePro/projects/OpenViking` |
 
 Do not silently rebase, merge, switch the base, or move implementation into the
@@ -167,10 +169,12 @@ Implementation files in the isolated worktree:
 
 - `tools/codex_compaction_hooks/codex_compaction_hook.py`;
 - `openviking/models/vlm/backends/codex_responses_adapter.py`;
+- `openviking/models/vlm/backends/codex_auth.py`;
 - `openviking/models/vlm/backends/codex_vlm.py`;
 - `openviking_cli/utils/config/vlm_config.py`;
 - `tests/unit/test_codex_compaction_hook.py`;
-- `tests/unit/test_codex_responses_state.py`.
+- `tests/unit/test_codex_responses_state.py`;
+- `tests/unit/test_codex_vlm.py`.
 
 ### 6.1 New offline critical suites
 
@@ -184,9 +188,9 @@ PYTHONPATH=/tmp/openviking-codex-responses-test-deps-20260731 \
   --no-cov
 ```
 
-Result: `92 collected`, `92 passed`, `4` pre-existing Pydantic warnings,
-`0 skipped`, `0 xfailed`. The parameterized result comprises 24 hook cases and
-68 Responses-state/config/security cases.
+Result: `102 collected`, `102 passed`, `4` pre-existing Pydantic warnings,
+`0 skipped`, `0 xfailed`. The parameterized result comprises 30 hook cases and
+72 Responses-state/config/security cases.
 
 ### 6.2 Combined new and targeted legacy suites
 
@@ -202,7 +206,7 @@ PYTHONPATH=/tmp/openviking-codex-responses-test-deps-20260731 \
   --no-cov
 ```
 
-Result: `122 collected`, `121 passed`, `1 failed`, `4 warnings`. The only
+Result: `132 collected`, `131 passed`, `1 failed`, `4 warnings`. The only
 failure was the clean-base baseline failure at
 `tests/unit/test_codex_vlm.py:207`,
 `test_vlm_config_default_provider_resolves_codex`, already recorded in section
@@ -224,7 +228,7 @@ PYTHONPATH=/tmp/openviking-codex-responses-test-deps-20260731 \
   --no-cov
 ```
 
-Result: `142 collected`, `130 passed`, `12 failed`, `4 warnings`.
+Result: `152 collected`, `140 passed`, `12 failed`, `4 warnings`.
 
 Clean-main comparison command, run from
 `/Volumes/ExtremePro/projects/OpenViking`:
@@ -250,26 +254,32 @@ Commands:
 /Volumes/ExtremePro/pyenv/shims/ruff check \
   tools/codex_compaction_hooks/codex_compaction_hook.py \
   openviking/models/vlm/backends/codex_responses_adapter.py \
+  openviking/models/vlm/backends/codex_auth.py \
   openviking/models/vlm/backends/codex_vlm.py \
   openviking_cli/utils/config/vlm_config.py \
   tests/unit/test_codex_compaction_hook.py \
-  tests/unit/test_codex_responses_state.py
+  tests/unit/test_codex_responses_state.py \
+  tests/unit/test_codex_vlm.py
 
 /Volumes/ExtremePro/pyenv/shims/ruff format --check \
   tools/codex_compaction_hooks/codex_compaction_hook.py \
   openviking/models/vlm/backends/codex_responses_adapter.py \
+  openviking/models/vlm/backends/codex_auth.py \
   openviking/models/vlm/backends/codex_vlm.py \
   openviking_cli/utils/config/vlm_config.py \
   tests/unit/test_codex_compaction_hook.py \
-  tests/unit/test_codex_responses_state.py
+  tests/unit/test_codex_responses_state.py \
+  tests/unit/test_codex_vlm.py
 
 /Volumes/ExtremePro/projects/OpenViking/.venv/bin/python -m compileall -q \
   tools/codex_compaction_hooks/codex_compaction_hook.py \
   openviking/models/vlm/backends/codex_responses_adapter.py \
+  openviking/models/vlm/backends/codex_auth.py \
   openviking/models/vlm/backends/codex_vlm.py \
   openviking_cli/utils/config/vlm_config.py \
   tests/unit/test_codex_compaction_hook.py \
-  tests/unit/test_codex_responses_state.py
+  tests/unit/test_codex_responses_state.py \
+  tests/unit/test_codex_vlm.py
 
 git diff --check
 ```
@@ -277,7 +287,7 @@ git diff --check
 Results:
 
 - Ruff check: `All checks passed!`;
-- Ruff format check: `6 files already formatted`;
+- Ruff format check: `8 files already formatted`;
 - `compileall -q`: PASS;
 - `git diff --check`: PASS.
 
@@ -299,39 +309,37 @@ state-mode canary.
 
 Security revision 2 found no Critical or High issue. The review scored `95.6%`
 aggregate with every individual criterion at least `91%`, so the security veto
-against a possible offline-only commit was lifted. This does not authorize a
-commit, and no commit was created in this run.
+against an offline-only commit was lifted. The outcome remains provisional
+because the requested Claude Opus reviewer was not available.
 
-The outcome is provisional because the requested Claude Opus reviewer was not
-available. Three Medium residuals remain explicit:
+All three Medium residuals were then closed offline in commits
+`325e5cff3895036a2fc0e8a0a93131e77f7c9d0d` and
+`0556a9aac049d2563893e1abe4068c0260024542`:
 
-1. **OAuth `client_id` binding gap:** the current chain binding does not yet
-   provide the independently reviewed, explicit `client_id` assurance requested
-   for the pilot boundary.
-2. **Unshielded async cleanup:** cancellation can still interrupt async cleanup;
-   cleanup should be shielded or otherwise proven to complete without masking
-   the original cancellation.
-3. **Hook TOCTOU/deadline/retention:** component checks still have residual
-   check/use race exposure, the internal deadline is checked rather than
-   forcibly enforced around every blocking operation, and private correlation
-   record retention/cleanup is not yet bounded operationally.
+1. **Credential binding without `client_id`:** chains bind to the stable
+   credential slot (`credential_slot` or persistent path), while an available
+   `client_id` remains an additional binding component.
+2. **Cancellation-safe async cleanup:** one shielded cleanup task attempts both
+   stream and client close despite repeated cancellation or an earlier close
+   failure; the original cancellation retains priority and the chain slot is
+   released in the outer `finally`.
+3. **Hook TOCTOU/deadline/retention:** I/O stays anchored to validated directory
+   FDs; a signal timer enforces the outer five-second deadline; TTL, record and
+   scan limits bound retention under process and thread locking.
 
-These Medium items do not reinstate the offline-commit security veto, but they
-remain required follow-up evidence. Activation, provider canary, deployment,
-and promotion remain HOLD.
+The corresponding candidate suites now pass 102/102. Activation, independent
+security revalidation, provider canary, deployment and promotion remain HOLD.
 
-Still in progress:
+Still HOLD or pending separate authorization:
 
 - explicit resolution of the pre-existing legacy provider-config test conflict;
-- resolution or explicit acceptance plan for the three Security Rev2 Mediums;
 - local Codex comparison matrix;
 - exact private Codex endpoint capability probe;
 - billable/live state canary;
-- final ARD/TRD/PD status refresh, open-item report, and final cross-document
-  consistency review.
+- independent security revalidation before activation.
 
-The Test Dossier and Development Diary contain the final 92/92 candidate counts,
-121/122 core result, and 130/142 expanded result. Sections 6.1 through 6.4 of
+The Test Dossier and Development Diary contain the final 102/102 candidate
+counts, 131/132 core result, and 140/152 expanded result. Sections 6.1 through 6.4 of
 this STP retain the exact commands and clean-base comparison boundary.
 
 ## 7. Hard stop and HOLD rules
@@ -411,7 +419,7 @@ git worktree list --porcelain
 Expected immutable identity before continuation:
 
 ```text
-HEAD:   60ef45d4c3a7d07ceb1df4e9d7dde7a14449ac50
+HEAD:   0556a9aac049d2563893e1abe4068c0260024542 or a later documentation-only commit
 branch: agent-workflow/20260731-codex-compaction-responses
 ```
 
@@ -439,23 +447,21 @@ stat -f '%Sp %Su:%Sg %N' \
 Then:
 
 1. Confirm the active hashes equal the three backup hashes in section 4.
-2. Read the current ARD, TRD, PD, TD, this STP, and source diff. Confirm that ID,
-   Diary, Manual, Proposal, and open-item report are still absent before relying
-   on them.
-3. Reconcile every artifact status against `git status`, `git diff --stat`, and
-   exact file hashes. Preserve the uncommitted worktree.
+2. Read the current ARD, TRD, PD, TD, this STP, ID, Diary, Manual, Proposal and
+   open-item report before relying on their status.
+3. Reconcile every artifact status against `git status`, `git log --oneline`,
+   and exact file hashes. Preserve any user-owned worktree change.
 4. Rerun the two offline commands in sections 6.1 and 6.2 before changing code.
-   The expected results are 92/92 for the new suites and 121/122 combined with
+   The expected results are 102/102 for the new suites and 131/132 combined with
    only the recorded baseline failure. Rerun section 6.3 when changing config;
    compare all 12 failures against the two recorded clean-base baselines.
 5. Confirm the current Agent Workflow gate and obtain the missing independent
    security/simulation records.
-6. Complete the non-live documentation and resolve the legacy test-contract
-   conflict. Do not jump to provider capability, canary, activation, or
-   promotion.
+6. Resolve the legacy test-contract conflict. Do not jump to provider
+   capability, canary, activation, or promotion.
 7. The private Codex capability probe, A/B corpus, canary, hook installation,
-   threshold change, commit, push, PR, merge, and promotion each remain separate
-   gated actions. Do not infer authorization from this STP.
+   threshold change, push, PR, merge, and promotion each remain separate gated
+   actions. Do not infer authorization from this STP.
 8. After a significant step, record the exact command, outcome, changed files,
    blockers, and next gate in this STP and the Development Diary.
 9. Before any completion claim, run the full updated Test Dossier, the unchanged
@@ -483,36 +489,35 @@ The paths below reflect the final observed worktree state, not planned claims.
 
 | Artifact | Required path or category | Final observed status |
 |---|---|---|
-| Architecture Requirement Dossier | `docs/dossiers/2026-07-31-codex-compaction-openviking-responses-ard.md` | PRESENT; planning status is stale |
-| Technical Requirement Dossier | `docs/dossiers/2026-07-31-codex-compaction-openviking-responses-trd.md` | PRESENT; pre-implementation status is stale |
-| Planning Document with QWF | `docs/plan/2026-07-31-codex-compaction-openviking-responses-pd.md` | PRESENT; planning status is stale |
+| Architecture Requirement Dossier | `docs/dossiers/2026-07-31-codex-compaction-openviking-responses-ard.md` | CURRENT; offline security closure recorded |
+| Technical Requirement Dossier | `docs/dossiers/2026-07-31-codex-compaction-openviking-responses-trd.md` | CURRENT; offline security closure recorded |
+| Planning Document with QWF | `docs/plan/2026-07-31-codex-compaction-openviking-responses-pd.md` | CURRENT; live gates remain HOLD |
 | Implementation Dossier | `docs/dossiers/2026-07-31-codex-compaction-openviking-responses-id.md` | PRESENT; offline candidate, live HOLD |
 | Implementation simulation and scoring | ID | PASS: 96.0% aggregate, minimum criterion 92% |
-| Test Dossier | `docs/tests/2026-07-31-codex-compaction-openviking-responses-td.md` | CURRENT; 92/92 candidate evidence and baseline HOLD recorded |
+| Test Dossier | `docs/tests/2026-07-31-codex-compaction-openviking-responses-td.md` | CURRENT; 102/102 candidate evidence and baseline HOLD recorded |
 | Test simulation and scoring | TD | PASS prerequisite: 97.2% aggregate, each criterion at least 96% |
-| Hook-hardening implementation | `tools/codex_compaction_hooks/codex_compaction_hook.py` | IMPLEMENTED; 24/24 cases including parent-symlink rejection; NOT INSTALLED |
+| Hook-hardening implementation | `tools/codex_compaction_hooks/codex_compaction_hook.py` | IMPLEMENTED; 30/30 cases including Directory-FD, deadline and retention; NOT INSTALLED |
 | Codex comparison matrix | sanitized evidence artifact | NOT RUN / HOLD |
-| Responses state, adapter, and config propagation | isolated worktree source files | IMPLEMENTED; 68/68 cases; OPT-IN only |
-| Unit/contract/legacy results | section 6 | 92/92 new; core 121/122; expanded 130/142, baseline-only failures |
-| Security review revision 2 | section 6.6 | Provisional PASS for offline commit only; 95.6%, minimum 91%, 3 Mediums |
+| Responses state, adapter, and config propagation | isolated worktree source files | IMPLEMENTED; 72/72 cases; OPT-IN only |
+| Unit/contract/legacy results | section 6 | 102/102 new; core 131/132; expanded 140/152, baseline-only failures |
+| Security review revision 2 | section 6.6 | Provisional PASS; 95.6%, minimum 91%; 3 Mediums subsequently closed offline |
 | Capability-probe evidence | exact approved Codex endpoint | NOT RUN; approval/billing HOLD |
 | MCP handshake and read-only call | section 6.5 | PASS; no restart; not a provider canary |
-| Open-item report | exactly 3 High, 3 Medium, 3 Low | PENDING |
+| Open-item report | exactly 3 High, 3 Medium, 3 Low | PRESENT; M1-M3 DONE offline, H1-H3 HOLD |
 | Session Transfer Protocol | `docs/sessions/2026-07-31-codex-compaction-openviking-responses-stp.md` | UPDATED / WORKFLOW HOLD |
 | Development Diary | `docs/diaries/Development_Diary_v000.md` | CURRENT; final test evidence and no-activation status recorded |
 | Project Manual | `docs/manuals/2026-07-31-codex-compaction-openviking-responses-manual.html` | PRESENT; activation remains HOLD |
 | Proposal Dossier | `docs/vision/2026-07-31-codex-compaction-openviking-responses-ppd.md` | PRESENT; proposals only |
-| Targeted Git commit | isolated branch only | NOT CREATED; uncommitted changes retained |
+| Targeted Git commit | isolated branch only | PRESENT; implementation `a84a3730`, security follow-ups `325e5cff` and `0556a9aa` |
 | PR | optional and separately authorized | NOT CREATED |
 | Merge/default promotion | separate review and authorization | NOT AUTHORIZED |
 
 ## 11. Completion criteria not yet met
 
-The offline implementation is verified, but the workflow may not be called
-complete while the combined suite has the known unresolved failure, required
-planning dossiers are stale, Security Rev2 remains provisional with three
-Mediums, and the live/A/B gates remain unexecuted. Promotion additionally
-requires:
+The requested offline security residual closure is verified. The wider workflow
+may not be called complete while the combined suite has the known unresolved
+baseline failure, Security Rev2 lacks independent revalidation, and the live/A/B
+gates remain unexecuted. Promotion additionally requires:
 
 - no quality regression or critical scenario loss;
 - at least 20% lower median output tokens;
@@ -521,8 +526,8 @@ requires:
 - zero cross-chain leaks;
 - 100% passing critical continuity, security, and legacy gates.
 
-The current state meets the offline implementation and new critical-test claims
-only. It does not meet workflow-completion, activation, live capability, A/B,
-canary, commit, deployment, or promotion claims. Resume with the non-live
-planning-document/security-Medium gaps and the legacy contract decision; retain
-HOLD on all provider-facing or activating actions until separately authorized.
+The current state meets the offline implementation, security-residual and new
+critical-test claims. It does not meet workflow-completion, activation, live
+capability, A/B, canary, deployment or promotion claims. Resume with the legacy
+contract decision and independent review; retain HOLD on all provider-facing or
+activating actions until separately authorized.
