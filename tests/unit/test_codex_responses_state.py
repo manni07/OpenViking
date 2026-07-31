@@ -1235,6 +1235,34 @@ def test_oauth_state_mode_requires_stable_principal_claims(mock_resolve):
         vlm._get_or_create_state_adapters()
 
 
+def test_oauth_credential_slot_is_stable_without_client_id_across_owner_transition():
+    """A refresh takeover must not invalidate the same persistent credential slot."""
+    token = "eyJhbGciOiJub25lIn0.eyJpc3MiOiJodHRwczovL2F1dGgub3BlbmFpLmNvbSIsInN1YiI6InVzZXItMSJ9."
+    external = {
+        "api_key": token,
+        "base_url": APPROVED_ORIGIN,
+        "auth_owner": "external",
+        "source": "codex-cli",
+        "path": "/redacted/persistent-auth-slot",
+    }
+    taken_over = {
+        **external,
+        "auth_owner": "openviking",
+        "source": "openviking",
+    }
+    different_slot = {
+        **taken_over,
+        "path": "/redacted/different-auth-slot",
+    }
+
+    first = CodexVLM._oauth_state_bindings(external, "")
+    second = CodexVLM._oauth_state_bindings(taken_over, "")
+    other = CodexVLM._oauth_state_bindings(different_slot, "")
+
+    assert first[3] == second[3]
+    assert first[3] != other[3]
+
+
 @pytest.mark.parametrize(
     "unsafe_config",
     [
@@ -1316,6 +1344,30 @@ class FakeAsyncClient:
         self.close_calls += 1
 
 
+class BlockingCloseAsyncStream(FakeAsyncStream):
+    def __init__(
+        self,
+        events: Iterable[Any],
+        *,
+        close_started: asyncio.Event,
+        close_release: asyncio.Event,
+        **kwargs: Any,
+    ):
+        super().__init__(events, **kwargs)
+        self._close_started = close_started
+        self._close_release = close_release
+
+    async def aclose(self) -> None:
+        self._close_started.set()
+        await self._close_release.wait()
+        self.closed = True
+
+
+class FailingCloseAsyncStream(FakeAsyncStream):
+    async def aclose(self) -> None:
+        raise RuntimeError("stream close failed")
+
+
 def _async_adapter(
     async_client: FakeAsyncClient,
     *,
@@ -1377,6 +1429,78 @@ async def test_async_cancellation_closes_stream_propagates_and_publishes_nothing
         )
 
     assert stream.closed is True
+    assert async_client.close_calls == 1
+
+
+@pytest.mark.asyncio
+async def test_repeated_async_cancellation_waits_for_stream_and_client_cleanup():
+    """A second cancel must not interrupt resource close or leak the chain slot."""
+    iteration_started = asyncio.Event()
+    iteration_release = asyncio.Event()
+    close_started = asyncio.Event()
+    close_release = asyncio.Event()
+    blocked_stream = BlockingCloseAsyncStream(
+        _events([_message("never published")]),
+        entered=iteration_started,
+        release=iteration_release,
+        close_started=close_started,
+        close_release=close_release,
+    )
+    next_stream = FakeAsyncStream(_events([_message("after cleanup")]))
+    async_client = FakeAsyncClient([blocked_stream, next_stream])
+    async_adapter, _sync_holder = _async_adapter(
+        async_client,
+        limits=_limits(max_concurrent_chains=1),
+    )
+    task = asyncio.create_task(
+        async_adapter.create_with_state(
+            state=None,
+            expected_generation=None,
+            model=MODEL,
+            instructions=INSTRUCTIONS,
+            messages=[{"role": "user", "content": "cancel twice"}],
+        )
+    )
+    await iteration_started.wait()
+
+    task.cancel()
+    await close_started.wait()
+    task.cancel()
+    await asyncio.sleep(0)
+
+    assert task.done() is False
+    close_release.set()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    assert blocked_stream.closed is True
+    assert async_client.close_calls == 1
+
+    result = await async_adapter.create_with_state(
+        state=None,
+        expected_generation=None,
+        model=MODEL,
+        instructions=INSTRUCTIONS,
+        messages=[{"role": "user", "content": "after cleanup"}],
+    )
+    assert result.result.choices[0].message.content == "after cleanup"
+
+
+@pytest.mark.asyncio
+async def test_async_stream_close_failure_still_closes_client():
+    """One resource close failure must not skip cleanup of later resources."""
+    stream = FailingCloseAsyncStream(_events([_message("response")]))
+    async_client = FakeAsyncClient([stream])
+    async_adapter, _sync_holder = _async_adapter(async_client)
+
+    with pytest.raises(_error("CodexStateTransportError")):
+        await async_adapter.create_with_state(
+            state=None,
+            expected_generation=None,
+            model=MODEL,
+            instructions=INSTRUCTIONS,
+            messages=[{"role": "user", "content": "close failure"}],
+        )
+
     assert async_client.close_calls == 1
 
 

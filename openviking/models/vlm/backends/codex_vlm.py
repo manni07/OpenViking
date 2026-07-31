@@ -316,16 +316,20 @@ class CodexVLM(OpenAIVLM):
     ) -> tuple[str, str, str, str]:
         access_token = str(credentials["api_key"])
         principal = CodexVLM._stable_oauth_principal(access_token)
-        credential_slot = "|".join(
-            (
-                str(credentials.get("auth_owner", "") or ""),
-                str(credentials.get("source", "") or ""),
-                str(credentials.get("path", "") or ""),
-                str(credentials.get("client_id", "") or ""),
-            )
-        )
+        slot = str(credentials.get("credential_slot") or credentials.get("path") or "").strip()
+        client_id = str(credentials.get("client_id", "") or "").strip()
         if not principal:
             raise CodexStateBindingError("Codex OAuth state requires stable principal claims.")
+        if not slot:
+            raise CodexStateBindingError("Codex OAuth state requires a stable credential slot.")
+        credential_slot = json.dumps(
+            {
+                "client_id": client_id or None,
+                "slot": slot,
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        )
         return (
             access_token,
             explicit_api_base or str(credentials["base_url"]),
