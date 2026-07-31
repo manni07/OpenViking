@@ -12,7 +12,12 @@ from typing import Any
 
 from loguru import logger
 
-from openviking.utils.model_retry import is_retryable_rate_limit_error, rate_limit_retry_delay
+from openviking.utils.model_retry import (
+    is_retryable_rate_limit_error,
+    is_vlm_error_non_retryable,
+    mark_vlm_error_non_retryable,
+    rate_limit_retry_delay,
+)
 from vikingbot.integrations.langfuse import LangfuseClient
 from vikingbot.providers.base import (
     LLMProvider,
@@ -24,6 +29,10 @@ from vikingbot.providers.base import (
     stream_delta_value,
 )
 from vikingbot.utils.tracing import get_current_response_id
+
+_NON_RETRYABLE_RESPONSE = "VLM response interrupted after partial output."
+_NON_RETRYABLE_CATEGORY = "partial_stream_non_retryable"
+_NON_RETRYABLE_LOG = "VLM adapter stopped a non-retryable partial stream."
 
 
 class VLMProviderAdapter(LLMProvider):
@@ -92,6 +101,8 @@ class VLMProviderAdapter(LLMProvider):
                     )
                     break
                 except Exception as e:
+                    if is_vlm_error_non_retryable(e):
+                        raise
                     if not is_retryable_rate_limit_error(e):
                         raise
                     delay = rate_limit_retry_delay(attempt)
@@ -113,6 +124,11 @@ class VLMProviderAdapter(LLMProvider):
             return llm_response
 
         except Exception as e:
+            if is_vlm_error_non_retryable(e):
+                logger.error(_NON_RETRYABLE_LOG)
+                if langfuse_observation:
+                    self._end_langfuse_observation_non_retryable(langfuse_observation)
+                return LLMResponse(content=_NON_RETRYABLE_RESPONSE, finish_reason="error")
             if langfuse_observation:
                 self._end_langfuse_observation_error(langfuse_observation, e)
             return LLMResponse(
@@ -164,6 +180,11 @@ class VLMProviderAdapter(LLMProvider):
         max_tokens: int,
         temperature: float,
     ) -> AsyncIterator[LLMStreamEvent]:
+        langfuse_observation = self._start_stream_langfuse_observation(
+            model or self._default_model,
+            messages,
+            tools,
+        )
         kwargs: dict[str, Any] = {
             "model": model or getattr(self._vlm, "model", None) or self._default_model,
             "messages": messages,
@@ -187,6 +208,7 @@ class VLMProviderAdapter(LLMProvider):
         tool_calls: dict[int, dict[str, Any]] = {}
         finish_reason = "stop"
         usage: dict[str, int] = {}
+        saw_event = False
 
         attempt = 1
         while True:
@@ -200,6 +222,7 @@ class VLMProviderAdapter(LLMProvider):
                 client = self._vlm.get_async_client()
                 response = await client.chat.completions.create(**kwargs)
                 async for chunk in response:
+                    saw_event = True
                     chunk_usage = self._parse_usage(getattr(chunk, "usage", None))
                     if chunk_usage:
                         usage = chunk_usage
@@ -236,19 +259,38 @@ class VLMProviderAdapter(LLMProvider):
                 if usage:
                     self._record_vlm_usage(usage, time.perf_counter() - start_time)
 
+                final_response = build_stream_response(
+                    content="".join(content_parts),
+                    reasoning_content="".join(reasoning_parts),
+                    raw_tool_calls=tool_calls,
+                    finish_reason=finish_reason,
+                    usage=usage,
+                )
+                if langfuse_observation:
+                    self._end_langfuse_observation(langfuse_observation, final_response)
                 yield LLMStreamEvent(
                     type="response",
-                    response=build_stream_response(
-                        content="".join(content_parts),
-                        reasoning_content="".join(reasoning_parts),
-                        raw_tool_calls=tool_calls,
-                        finish_reason=finish_reason,
-                        usage=usage,
-                    ),
+                    response=final_response,
                 )
                 return
             except Exception as e:
+                if saw_event:
+                    e = mark_vlm_error_non_retryable(e)
+                if is_vlm_error_non_retryable(e):
+                    logger.error(_NON_RETRYABLE_LOG)
+                    if langfuse_observation:
+                        self._end_langfuse_observation_non_retryable(langfuse_observation)
+                    yield LLMStreamEvent(
+                        type="response",
+                        response=LLMResponse(
+                            content=_NON_RETRYABLE_RESPONSE,
+                            finish_reason="error",
+                        ),
+                    )
+                    return
                 if not is_retryable_rate_limit_error(e):
+                    if langfuse_observation:
+                        self._end_langfuse_observation_error(langfuse_observation, e)
                     yield LLMStreamEvent(
                         type="response",
                         response=LLMResponse(
@@ -266,6 +308,30 @@ class VLMProviderAdapter(LLMProvider):
                 )
                 await asyncio.sleep(delay)
                 attempt += 1
+
+    def _start_stream_langfuse_observation(self, model, messages, tools):
+        try:
+            if not self._langfuse.enabled or not self._langfuse._client:
+                return None
+            metadata: dict[str, Any] = {"has_tools": tools is not None}
+            response_id = get_current_response_id()
+            if response_id:
+                metadata["response_id"] = response_id
+            client = self._langfuse._client
+            if not hasattr(client, "start_observation"):
+                return None
+            observation = client.start_observation(
+                name="llm-chat-stream",
+                as_type="generation",
+                model=model,
+                input=messages,
+                metadata=metadata,
+            )
+            if response_id:
+                self._langfuse.register_generation(response_id, observation, metadata=metadata)
+            return observation
+        except Exception:
+            return None
 
     @staticmethod
     def _usage_value(usage: Any, name: str) -> int:
@@ -429,5 +495,19 @@ class VLMProviderAdapter(LLMProvider):
                 self._langfuse.flush()
             except Exception:
                 pass
+        except Exception:
+            pass
+
+    def _end_langfuse_observation_non_retryable(self, obs) -> None:
+        try:
+            metadata = {"error": _NON_RETRYABLE_CATEGORY}
+            response_id = get_current_response_id()
+            if response_id:
+                metadata["response_id"] = response_id
+            if hasattr(obs, "update"):
+                obs.update(output=_NON_RETRYABLE_RESPONSE, metadata=metadata)
+            if hasattr(obs, "end"):
+                obs.end()
+            self._langfuse.flush()
         except Exception:
             pass

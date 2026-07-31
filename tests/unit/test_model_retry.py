@@ -274,6 +274,28 @@ def test_non_retryable_marker_round_trips_without_replacing_exception():
     assert check(error) is True
 
 
+class _MarkerAssignmentRejectingError(RuntimeError):
+    def __setattr__(self, name, value):
+        if name == "_openviking_vlm_non_retryable":
+            raise RuntimeError("instance marker assignment denied")
+        super().__setattr__(name, value)
+
+
+def test_non_retryable_marker_wraps_assignment_rejecting_exception_without_leak():
+    mark, check = _marker_helpers()
+    original = _MarkerAssignmentRejectingError("SENTINEL-MARKER-SECRET")
+
+    wrapped = mark(original)
+
+    assert wrapped is not original
+    assert wrapped.__cause__ is original
+    assert vars(type(wrapped)).get("_openviking_vlm_non_retryable") is True
+    assert "_openviking_vlm_non_retryable" not in vars(wrapped)
+    assert check(wrapped) is True
+    assert "SENTINEL-MARKER-SECRET" not in str(wrapped)
+    assert "SENTINEL-MARKER-SECRET" not in repr(wrapped)
+
+
 def test_non_retryable_marker_traverses_both_edges_and_cycles_by_identity():
     mark, check = _marker_helpers()
     root = RuntimeError("root")
@@ -419,6 +441,21 @@ class _CountedErrors(list):
             yield item
 
 
+class _DeceptiveErrors(list):
+    def __init__(self):
+        self.reads = 0
+
+    def __len__(self):
+        return 1
+
+    def __iter__(self):
+        for index in range(258):
+            self.reads += 1
+            if self.reads == 258:
+                raise AssertionError("aggregate child 258 must not be read")
+            yield (str(index), ERROR_CLASS_TRANSIENT, RuntimeError(str(index)), index)
+
+
 class _UnreadableAggregate(AllCredentialsFailedError):
     @property
     def errors(self):
@@ -509,6 +546,15 @@ def test_non_retryable_marker_aggregate_257_children_fails_closed_without_overre
     assert errors.reads <= 256
 
 
+def test_non_retryable_marker_deceptive_aggregate_stops_at_child_257():
+    _mark, check = _marker_helpers()
+    errors = _DeceptiveErrors()
+
+    assert len(errors) == 1
+    assert check(_aggregate_with_errors(errors)) is True
+    assert errors.reads == 257
+
+
 def test_non_retryable_marker_real_graph_over_512_edges_fails_closed_at_hard_bound():
     _mark, check = _marker_helpers()
     root, root_errors = _edge_overflow_graph()
@@ -586,10 +632,10 @@ async def test_graph_failure_rethrows_before_callbacks_logs_delays_or_second_ope
         patch.object(model_retry, "_compute_delay") as delay,
         patch.object(model_retry.time, "sleep") as sync_sleep,
         patch.object(asyncio, "sleep") as async_sleep,
-        pytest.raises(RuntimeError) as sync_raised,
+        pytest.raises(type(error)) as sync_raised,
     ):
         retry_sync(sync_operation, max_retries=3, is_retryable=callback, logger=logger)
-    with pytest.raises(RuntimeError) as async_raised:
+    with pytest.raises(type(error)) as async_raised:
         await retry_async(async_operation, max_retries=3, is_retryable=callback, logger=logger)
 
     assert sync_raised.value is error

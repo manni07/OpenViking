@@ -22,7 +22,7 @@
 ## Codex-Compaction und OpenViking Responses State
 
 Datum: 2026-07-31
-Status: Offline-Kandidat vorhanden; Legacy-VLM-H3, Security und Live auf HOLD
+Status: Offline Legacy-VLM HOLD aufgehoben; Live M1 und Promotion auf HOLD
 
 ## Ausgangslage
 
@@ -126,3 +126,29 @@ Default-Promotion sind ausdrücklich nicht bewiesen.
 - [Test Dossier](../tests/2026-07-31-codex-compaction-openviking-responses-td.md)
 - [Lessons Learned](../lessons/2026-07-31-codex-compaction-openviking-responses-lessons-learned.md)
 - [Open Items](../sessions/2026-07-31-codex-compaction-openviking-responses-open-items.md)
+
+## Nachtrag: user-autorisierter Offline-HOLD-Lift
+
+Nach dem alten finalen HOLD autorisierte der User einen neuen Offline-Zyklus.
+Architektur 97/96/100, H1 direkt RED, Pre-Source Security 93/100 bei 0C/0H und
+Implementierungssimulation 96,6 Prozent bei Minimum 95 öffneten den engen
+Sourceumfang. Der erste Stand bestand 267/267, wurde wegen H6 in Security Rev1
+aber bei 86/100, 0C/1H/2M erneut gesperrt.
+
+Fünf neue H6-Tests waren zunächst RED. Die Korrektur verwendet für nicht
+instanzmarkierbare Exceptions einen opaken, klassenmarkierten Wrapper mit dem
+identischen Original als `__cause__`; M2 stoppt beim 257. Aggregate-Kind
+fail-closed, bevor Kind 258 gelesen wird. Ein Test erwartete für einen
+`AllCredentialsFailedError` fälschlich `RuntimeError`; korrigiert wurde nur die
+erwartete konkrete Exceptionklasse. Danach bestanden 5/5, 189/189 und 272/272
+ohne Fail, Skip oder Xfail. Testsimulation 98 Prozent, Minimum 96; Security Rev2
+96/100, 0C/0H/1M, PASS.
+
+Vier bekannte Pydantic-Warnungen blieben sichtbar. Der finale breite Lauf wurde
+vom Worker und vom Supervisor mit 364 PASS plus exakt acht vorbestehenden
+VolcEngine-Konstruktorfehlern reproduziert. Keine breite Vollgrün- oder
+Coveragebehauptung. Die bestehende venv lief mit dem Overlay
+`PYTHONPATH=.:bot:/tmp/openviking-codex-responses-test-deps-20260731`.
+
+**Offline Legacy-VLM HOLD aufgehoben; Live M1 bleibt HOLD.** Kein Live-Test,
+keine Aktivierung, Promotion, kein Merge oder Restart.

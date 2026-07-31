@@ -1,47 +1,50 @@
-# Open-Item-Bericht: finaler Legacy-VLM-HOLD
+# Open-Item-Bericht nach Offline-HOLD-Lift
 
 **Stand:** 2026-07-31
-**Status:** Security Revision 3 VETO; kein Source-Unlock
+**Status:** Offline Legacy-VLM HOLD aufgehoben; Live M1 und Promotion auf HOLD
 **Session Transfer:**
 [STP](2026-07-31-codex-compaction-openviking-responses-stp.md)
 
 Dieser Bericht enthaelt exakt drei High-, drei Medium- und drei Low-Massnahmen.
-Nur H1 ist ein aktueller Security-High-Befund. H2 und H3 sind operative
-High-Prioritaets-Gates und keine zusaetzlichen Security-High-Befunde.
+Nach Security Rev2 bestehen **keine Critical- oder High-Security-Befunde**. Die
+High-Punkte unten sind operative Freigabe- oder getrennte Legacy-Gates.
 
 ## High — 3 Massnahmen
 
 | ID | Massnahme | Owner | Gate / Abschlusskriterium | Next command |
 |---|---|---|---|---|
-| H1 | Exakten nativen Stream-Langfuse-Testvertrag ergaenzen | `test_unit_agent`, danach `security_agent` | Erst nach neuer User-Autorisierung: fixes `output`, fixes `metadata.error`, keine weiteren Keys ausser optionaler `response_id`, eigene response-id-only-Variante; neues Security-Urteil `>=90`, `0C/0H` | Zunaechst kein Command; User-Autorisierung einholen, danach gezielten Testknoten aus `tests/unit/test_vikingbot_vlm_adapter_retry.py` ausfuehren |
-| H2 | Sourcepfad weiter gesperrt halten und nur durch neues Security-Gate oeffnen | `master_orchestrator` und `security_agent` | Security Revision 3 bleibt autoritativ `89/100`, `0C/1H/1M`; kein Source-Writer vor geschlossenem H1 und neuem `>=90`, `0C/0H` | `git status --short --branch` und `git diff --name-only` read-only pruefen |
-| H3 | Live-Provider-/Capability-/Canary-Gate getrennt wiederaufnehmen | `mcp_coordinator_agent` und `devops_agent` | Nur nach expliziter User-Wiederaufnahme: exakter HTTPS-Origin, ein Credential-Slot-Fingerprint, fixes Modell/Vision/Capabilities, numerische Request-/Token-/Bild-/Kostenlimits, Retry/Failover `0` | Kein Live-Command vor positivem lokalen Evidence Record |
+| H1 | Live-Provider-/Capability-Probe kontrolliert nachholen | `mcp_coordinator_agent`, `security_agent` | Nur nach ausdruecklicher User-Wiederaufnahme: exakter HTTPS-Origin, ein Credential-Slot, fixes Modell und harte Request-/Token-/Bild-/Kostenlimits; Retry und Failover `0` | Kein Live-Command; User hat den Live-Test vertagt |
+| H2 | Canary, A/B-Corpus und Promotionsevidenz erheben | `simulation_agent`, `test_unit_agent` | 20 reale + 10 synthetische Szenarien; keine Qualitaetsverschlechterung, mindestens 20% weniger mediane Output-Tokens, p95 hoechstens 10% schlechter, keine hoehere Fehlerrate | Erst nach positivem H1-Live-Gate und separater Datenfreigabe |
+| H3 | Acht VolcEngine-Konstruktor-Baselinefehler separat reparieren | `architecture_agent`, `test_unit_agent` | Eigenes Scope-Gate; `VolcEngineVLM`-Konstruktorvertrag eindeutig entscheiden; alle acht Tests gruen ohne Responses-/Legacy-VLM-Regression | Separaten Auftrag und eigenen Branch/Worktree verwenden |
 
 ## Medium — 3 Massnahmen
 
 | ID | Massnahme | Owner | Gate / Abschlusskriterium | Next command |
 |---|---|---|---|---|
-| M1 | Finale sechs-Datei-Evidenz nach einer autorisierten H1-Korrektur reproduzieren | `test_unit_agent` | Collection bleibt erklaert; keine Errors/Skips/Xfails; RED wird nur nach Source-Unlock zu GREEN gefuehrt | Sechs-Datei-Collect-/RED-Befehle aus STP Abschnitt 7.3 |
-| M2 | MCP-Freshness nur bei Bedarf read-only erneuern | `mcp_coordinator_agent` | Health exakt erfolgreich und `search_experience(..., limit=1)` liefert einen kontrollierten read-only Pfad; null Write/Restart | Erst bei Wiederaufnahme denselben read-only Health-/Search-Pfad verwenden |
-| M3 | Autorisierten HOLD-Draft-PR beobachten und fail-closed halten | `devops_agent` | Scope geprueft; HOLD-Evidenz committed und gepusht; Draft-PR bleibt ohne Merge/Activation; CI-Ergebnis wird nicht als Source-Unlock umgedeutet | Nach PR-Erstellung nur Status/Checks read-only pruefen; kein Merge |
+| M1 | Draft-PR und CI fail-loud beobachten | `devops_agent` | Commit und Push vorhanden; Checks transparent; Draft bleibt ohne Merge/Aktivierung | `gh pr checks 3667` read-only |
+| M2 | Vier bestehende Pydantic-Warnungen separat klassifizieren | `test_unit_agent` | Warnungen dokumentiert oder in eigenem Scope behoben; kein Umdeuten der gruene/roten Testevidenz | Spaeter denselben 272-Fall-Lauf mit Warning-Capture verwenden |
+| M3 | Nahe Dateigroessengrenze des Streamtests abbauen | `code_quality_api_agent` | `test_stream_config_vlm.py` liegt deutlich unter 1000 Zeilen, ohne Testverlust oder Produktionsrefactor | Separater Test-only Refactor; aktuell 998 Zeilen |
 
 ## Low — 3 Massnahmen
 
 | ID | Massnahme | Owner | Gate / Abschlusskriterium | Next command |
 |---|---|---|---|---|
-| L1 | Vier bestehende Pydantic-Warnungen separat klassifizieren | `test_unit_agent` | Warnungen ohne Scope-Mischung dokumentiert oder beseitigt; Security-/RED-Ergebnis nicht umetikettiert | Spaeter gezielten Lauf mit unveraendertem Warning-Capture verwenden |
-| L2 | Historische Rev2-PASS-/Unlock-Aussagen in weiteren Artefakten erst nach neuem Gate bereinigen | `documentation_agent` | Alle oeffentlichen Statusangaben nennen Rev3-VETO und verweisen auf das aktuelle STP; keine falsche Clearance | `rg -n "Revision 2|Source-Unlock|VETO" docs` read-only |
-| L3 | Inhaltsfreie Diagnostik fuer kuenftige Gatefehler pruefen | `code_quality_api_agent` | Keine Prompt-, Credential-, Tool-, State- oder Exceptioninhalte in Logs/Traces; nur feste Kategorien | Kein Source-Command vor Source-Unlock |
+| L1 | Lower-Level-Traceback-Risiko des erhaltenen `__cause__` dokumentieren | `security_agent` | Feste Sinks bleiben redigiert; direkte Aufrufer loggen keine Providerexception ungefiltert | Read-only Sink-Audit bei naechster Security-Runde |
+| L2 | Rueckgabevertrag des Markerhelpers gegen kuenftige Aufrufer absichern | `code_quality_api_agent` | Jeder Aufrufer behaelt das von `mark_vlm_error_non_retryable()` gelieferte Objekt | `rg -n "mark_vlm_error_non_retryable" openviking bot` plus Review |
+| L3 | Exotische nicht markierbare Cancellation-Exception bewerten | `test_unit_agent` | Built-in Cancellation bleibt korrekt; Sonderfall erhaelt nur bei realem Providerbedarf einen Contract-Test | Kein Source-Change ohne reproduzierbaren Fall |
+
+## Geschlossene Befunde
+
+- H1: exakter Langfuse-Vertrag und optionale `response_id` — **CLOSED**.
+- H6: Exception verweigert Markerzuweisung — **CLOSED** durch opaken,
+  klassenmarkierten Wrapper mit Original als `__cause__`.
+- M2: taeuschendes Aggregate-`len()` — **CLOSED**; Kind 257 loest
+  fail-closed aus, Kind 258 wird nicht gelesen.
+- Final Security Rev2: `96/100`, `0 Critical`, `0 High`, `1 Medium`, PASS.
 
 ## Verbindliche Stopregel
 
-Keine weitere Test-/Designrevision und keine Sourceaenderung in diesem Lauf.
-Keine Live-Calls, kein Merge, keine Aktivierung oder Promotion. Kein Restart
-ohne ausdrueckliche Bestaetigung. Eine Wiederaufnahme des Sourcepfads braucht
-neue User-Autorisierung, den korrigierten H1-Testvertrag und ein neues
-Security-Urteil von mindestens `90/100` bei `0 Critical` und `0 High`.
-
-Der aktuelle MCP-Nachweis ist nur ein enger dokumentierter read-only PASS:
-`OpenViking is healthy (service initialized, storage: VikingFS)` und genau ein
-Ergebnis aus `search_experience(..., limit=1)`, ohne Write oder Restart. Er ist
-kein Codex-Capability- oder Canary-Nachweis.
+Der Offline-HOLD ist aufgehoben. Live-Aufrufe, Canary, Aktivierung,
+Default-Promotion und Merge bleiben verboten, bis ihre eigenen Gates erfuellt
+sind. Kein Rechner-, Server-, Runtime-, Container-, Service- oder
+Prozess-Restart ohne ausdrueckliche User-Bestaetigung.

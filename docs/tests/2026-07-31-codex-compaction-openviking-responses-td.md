@@ -3,7 +3,7 @@
 ## Codex-Compaction und Responses State
 
 Stand: 2026-07-31
-Status: Responses-Kandidatensuiten grün; Legacy-VLM-H3-Security, Baseline und Live auf HOLD
+Status: Offline Legacy-VLM HOLD aufgehoben; 272/272 grün; Live M1 bleibt HOLD
 
 ## 1. Testabsicht
 
@@ -863,3 +863,39 @@ Gesamtstatus: **HOLD**.
 OpenViking MCP Health und echter read-only `search_experience`-Aufruf sind PASS,
 aber kein Provider-Capability-Test. Der User hat Live-Provider-Tests vertagt.
 Keine Skips/Xfails werden als Ersatzbeleg verwendet; M1 bleibt HOLD.
+
+## 15. Neuer HOLD-Lift-Testzyklus
+
+| Gate | Ergebnis |
+|---|---|
+| Architektur | 97 Design / 96 Interface / 100 Scope, PASS |
+| H1 test-first | direktes RED |
+| Pre-Source Security | 93/100, 0C/0H, PASS |
+| Implementierungssimulation | 96,6%, Minimum 95%, PASS |
+| erster Source-Stand | 267/267 |
+| Security Rev1 | 86/100, 0C/1H/2M, VETO H6 |
+| H6 test-first / nach Source | 5 RED → 5/5 PASS |
+| relevanter Ausschnitt | 189/189 PASS |
+| finale sechs Dateien | 272/272, 0 Fail/Skip/Xfail |
+| Testsimulation | 98%, Minimum 96%, PASS |
+| Security Rev2 | 96/100, 0C/0H/1M, PASS |
+
+H6 prüft nicht instanzmarkierbare Exceptions: Ein opaker, klassenmarkierter
+Wrapper bindet das identische Original als `__cause__`. M2 erzwingt den
+fail-closed Stopp beim 257. Aggregate-Kind, bevor Kind 258 gelesen wird. Ein
+initialer Test erwartete für einen `AllCredentialsFailedError` fälschlich
+`RuntimeError`, obwohl zugleich Objektidentität verlangt wurde; nur die
+erwartete konkrete Exceptionklasse wurde korrigiert, nicht der Klassifizierer.
+
+Alle Läufe nutzten:
+
+```text
+PYTHONPATH=.:bot:/tmp/openviking-codex-responses-test-deps-20260731 \
+/Volumes/ExtremePro/projects/OpenViking/.venv/bin/python -m pytest -q -o addopts=
+```
+
+Vier bekannte Pydantic-Warnungen blieben sichtbar. Worker und Supervisor
+reproduzierten den finalen 13-Dateien-Scope mit 364 PASS plus exakt acht
+vorbestehenden VolcEngine-Konstruktorfehlern. Keine Breitsuite wird als
+vollständig grün und keine numerische Coverage oder Mutation-Coverage
+behauptet. **Offline Legacy-VLM HOLD aufgehoben; Live M1 bleibt HOLD.**

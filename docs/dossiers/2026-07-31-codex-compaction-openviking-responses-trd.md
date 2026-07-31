@@ -3,7 +3,7 @@
 ## Codex Responses State und Compaction
 
 Stand: 2026-07-31
-Status: Responses-Kandidat offline verifiziert; Legacy-VLM-H3-Source und Live-Gates auf HOLD
+Status: Offline Legacy-VLM HOLD aufgehoben; Live M1 und Promotion auf HOLD
 
 ## 1. Technischer Vertrag
 
@@ -518,3 +518,21 @@ statt Revision 4.
 MCP Health plus echter read-only `search_experience`-Aufruf sind PASS, aber kein
 Provider-Capability-Beleg. Der User hat Live-Tests vertagt. M1, Source/Testcode,
 Restart, Merge, Aktivierung und Promotion bleiben gesperrt.
+
+## 14. Technischer Abschluss des Offline-HOLD-Lifts
+
+Der neue Zyklus bestand Architektur 97/96/100, Pre-Source Security 93/100 bei
+0C/0H und Implementierungssimulation 96,6 Prozent bei Minimum 95. Nach zunächst
+267/267 fand Security Rev1 H6 (86/100, 0C/1H/2M). Die Korrektur verwendet einen
+opaken, klassenmarkierten Wrapper mit Originalexception als `__cause__`; M2
+stoppt beim 257. Aggregate-Kind, bevor Kind 258 gelesen wird. Fünf direkte Tests
+wechselten RED zu 5/5 GREEN;
+189/189 und 272/272 bestanden ebenfalls ohne Fail, Skip oder Xfail.
+
+Die Testsimulation erreichte 98 Prozent bei Minimum 96. Security Rev2 bestand
+mit 96/100, 0C/0H/1M. Vier bekannte Pydantic-Warnungen blieben sichtbar. Alle
+Läufe nutzten `/Volumes/ExtremePro/projects/OpenViking/.venv/bin/python` mit
+`PYTHONPATH=.:bot:/tmp/openviking-codex-responses-test-deps-20260731` und
+`pytest -q -o addopts=`. Worker und Supervisor reproduzierten den finalen
+Breitscope mit 364 PASS plus exakt acht vorbestehenden VolcEngine-
+Konstruktorfehlern. **Offline Legacy-VLM HOLD aufgehoben; Live M1 bleibt HOLD.**

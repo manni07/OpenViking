@@ -424,6 +424,13 @@ class _SentinelError(RuntimeError):
         return f"SentinelError({self.args[0]}-REPR)"
 
 
+class _MarkerAssignmentRejectingSentinelError(_SentinelError):
+    def __setattr__(self, name, value):
+        if name == "_openviking_vlm_non_retryable":
+            raise RuntimeError("instance marker assignment denied")
+        super().__setattr__(name, value)
+
+
 _REDACTED_RESPONSE = "VLM response interrupted after partial output."
 _REDACTED_LOG = "VLM adapter stopped a non-retryable partial stream."
 _REDACTED_CATEGORY = "partial_stream_non_retryable"
@@ -505,6 +512,7 @@ async def test_marked_chat_error_redacts_response_logger_and_langfuse_payload(mo
 @pytest.mark.asyncio
 async def test_marked_native_stream_error_redacts_terminal_response_and_all_sinks(monkeypatch):
     terminal_contents = []
+    captures = []
     logger = MagicMock()
     classifier = MagicMock(return_value=True)
     sleep = AsyncMock()
@@ -535,13 +543,72 @@ async def test_marked_native_stream_error_redacts_terminal_response_and_all_sink
         terminal = events[-1].response
         assert terminal.finish_reason == "error"
         terminal_contents.append(terminal.content)
+        captures.append(langfuse.calls)
         captured = repr((events, logger.mock_calls, langfuse.calls))
         assert all(value not in captured for value in forbidden)
 
     assert terminal_contents == [_REDACTED_RESPONSE] * 2
     assert [item.args for item in logger.mock_calls] == [(_REDACTED_LOG,)] * 2
+    updates = [[payload for name, payload in calls if name == "update"] for calls in captures]
+    assert (
+        updates == [[{"output": _REDACTED_RESPONSE, "metadata": {"error": _REDACTED_CATEGORY}}]] * 2
+    )
     classifier.assert_not_called()
     sleep.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_marked_native_stream_langfuse_allows_only_response_id_metadata(monkeypatch):
+    response_id = "response-id-only"
+    monkeypatch.setattr(vlm_adapter, "get_current_response_id", lambda: response_id)
+    monkeypatch.setattr(vlm_adapter, "logger", MagicMock())
+    monkeypatch.setattr(vlm_adapter, "is_retryable_rate_limit_error", MagicMock(return_value=True))
+    monkeypatch.setattr(vlm_adapter.asyncio, "sleep", AsyncMock())
+
+    error = _mark_non_retryable(_SentinelError("SENTINEL-STREAM-RESPONSE-ID"))
+    completions = _OneShotStreamingCompletions(_FailAfterEvents([_native_event("content")], error))
+    langfuse = _CaptureLangfuse()
+    adapter = VLMProviderAdapter(_FakeStreamingVLM(completions), "test-model", langfuse)
+
+    events = [event async for event in adapter.chat_stream([{"role": "user", "content": "safe"}])]
+
+    assert events[-1].response.content == _REDACTED_RESPONSE
+    updates = [payload for name, payload in langfuse.calls if name == "update"]
+    assert updates == [
+        {
+            "output": _REDACTED_RESPONSE,
+            "metadata": {
+                "error": _REDACTED_CATEGORY,
+                "response_id": response_id,
+            },
+        }
+    ]
+
+
+@pytest.mark.asyncio
+async def test_native_stream_wraps_assignment_rejection_without_replay_or_secret_leak(monkeypatch):
+    sentinel = "SENTINEL-REJECTING-MARKER"
+    error = _MarkerAssignmentRejectingSentinelError(sentinel)
+    completions = _OneShotStreamingCompletions(_FailAfterEvents([_native_event("content")], error))
+    logger = MagicMock()
+    classifier = MagicMock(return_value=True)
+    sleep = AsyncMock()
+    langfuse = _CaptureLangfuse()
+    monkeypatch.setattr(vlm_adapter, "logger", logger)
+    monkeypatch.setattr(vlm_adapter, "is_retryable_rate_limit_error", classifier)
+    monkeypatch.setattr(vlm_adapter.asyncio, "sleep", sleep)
+    adapter = VLMProviderAdapter(_FakeStreamingVLM(completions), "test-model", langfuse)
+
+    events = [event async for event in adapter.chat_stream([{"role": "user", "content": "safe"}])]
+
+    assert completions.calls == 1
+    classifier.assert_not_called()
+    sleep.assert_not_called()
+    assert events[-1].response.content == _REDACTED_RESPONSE
+    assert [item.args for item in logger.mock_calls] == [(_REDACTED_LOG,)]
+    updates = [payload for name, payload in langfuse.calls if name == "update"]
+    assert updates == [{"output": _REDACTED_RESPONSE, "metadata": {"error": _REDACTED_CATEGORY}}]
+    assert sentinel not in repr((events, logger.mock_calls, langfuse.calls))
 
 
 @pytest.mark.asyncio

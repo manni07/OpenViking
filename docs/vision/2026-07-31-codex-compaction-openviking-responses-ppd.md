@@ -147,8 +147,8 @@ Nachteile:
 
 | Rang | Vorschlag | Voraussetzung | Entscheid |
 |---:|---|---|---|
-| 0 | H1 und Source-Unlock | Neue gesonderte Autorisierung außerhalb dieses Laufs | HOLD; nicht Teil dieser Revision |
-| 1 | A/B-Corpus | Security-Unlock und sanitierte, freigegebene Daten | HOLD |
+| 0 | Offline-HOLD-Lift | User-Autorisierung und Security Rev2 | PASS; 96/100, 0C/0H/1M |
+| 1 | A/B-Corpus | Sanitierte, freigegebene Daten | HOLD |
 | 2 | Capability-Recorder | Security-Unlock plus Kosten-/Live-Genehmigung | User hat Live-Test vertagt |
 | 3 | Property-/Mutationstests | Security-Unlock und Offline-Budget | HOLD |
 | 4 | Inhaltsfreie Metriken | Canary-Konzept | Später |
@@ -157,7 +157,15 @@ Nachteile:
 Keiner dieser Vorschläge autorisiert Provider-Aufrufe, Aktivierung, Restart oder
 Default-Promotion.
 
-## 8. Verweise
+## 8. Nachtrag zum Offline-HOLD-Lift
+
+Der neue Offline-Zyklus schloss H1, H6 und M2 test-first. Der gezielte Satz
+bestand 272/272; Security Rev2 bestand mit 96/100 und ohne Critical oder High.
+Damit ist der Offline-HOLD aufgehoben. Die acht vorbestehenden VolcEngine-
+Konstruktorfehler bleiben ein separater Legacy-Baselinebefund. Capability-Probe,
+Canary, Aktivierung und Promotion bleiben bis zum späteren Live-Test HOLD.
+
+## 9. Verweise
 
 - [Implementation Dossier](../dossiers/2026-07-31-codex-compaction-openviking-responses-id.md)
 - [Lessons Learned](../lessons/2026-07-31-codex-compaction-openviking-responses-lessons-learned.md)
