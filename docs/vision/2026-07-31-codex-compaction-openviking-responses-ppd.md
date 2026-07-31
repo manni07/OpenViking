@@ -15,17 +15,16 @@ Status: Vorschläge; keine Freigabe zur Umsetzung oder Aktivierung
 | Betrieb | Harte Limits und typisierte Fehler | Inhaltsfreie Aggregatmetriken |
 | Architektur | Codex-spezifischer Pilot | Erst evidenzbasiert abstrahieren |
 
-QWF: A/B-Corpus → Capability-Evidenz → Reducer-Härtung → sichere Metriken →
-erst danach Provider-Abstraktion.
+QWF: Security-HOLD respektieren → erst nach gesonderter künftiger Freigabe
+A/B-Corpus → Capability-Evidenz → Reducer-Härtung → sichere Metriken →
+Provider-Abstraktion.
 
-Der Security-Re-Review Revision 2 hat keine offenen Critical-/High-Befunde und
-95,6 % aggregiert bei mindestens 91 % je Kriterium ergeben. Wegen
-Nichtverfügbarkeit des geforderten aktuellen Claude Opus ist der
-Codex-Ersatzreview vorläufig. Die damalige Medium-Restarbeit ist im
-Offline-Follow-up abgeschlossen: stabile Credential-Slot-Bindung auch ohne
-`client_id`, cancellation-sicheres Async-Cleanup sowie
-Directory-FD-/Deadline-/Retention-Härtung. Vor einer Hook-Aktivierung bleibt
-eine unabhängige Revalidierung erforderlich.
+Der finale Legacy-VLM-H3-Security-Review endet nach drei Revisionen bei
+**89/100, 0C/1H/1M**. H2–H5 sind geschlossen, H1 bleibt exakt offen. Das Gate
+`0C/0H` und mindestens 90/100 ist verfehlt; Source-Unlock wurde verweigert und
+in diesem Lauf folgt keine weitere H1-Schließungsrevision. OpenViking MCP Health
+und echter read-only `search_experience` sind PASS, aber kein Provider-
+Capability-Beleg. Der User hat den Live-Test vertagt.
 
 ## 2. Vorschlag 1 — Reproduzierbarer A/B-Corpus
 
@@ -148,9 +147,10 @@ Nachteile:
 
 | Rang | Vorschlag | Voraussetzung | Entscheid |
 |---:|---|---|---|
-| 1 | A/B-Corpus | Sanitierte, freigegebene Daten | Empfohlen |
-| 2 | Capability-Recorder | Kosten-/Live-Genehmigung | Empfohlen nach 1 |
-| 3 | Property-/Mutationstests | Offline-Budget | Empfohlen |
+| 0 | H1 und Source-Unlock | Neue gesonderte Autorisierung außerhalb dieses Laufs | HOLD; nicht Teil dieser Revision |
+| 1 | A/B-Corpus | Security-Unlock und sanitierte, freigegebene Daten | HOLD |
+| 2 | Capability-Recorder | Security-Unlock plus Kosten-/Live-Genehmigung | User hat Live-Test vertagt |
+| 3 | Property-/Mutationstests | Security-Unlock und Offline-Budget | HOLD |
 | 4 | Inhaltsfreie Metriken | Canary-Konzept | Später |
 | 5 | Provider-Abstraktion | Erfolgreicher Pilot | Zurückstellen |
 
@@ -160,4 +160,5 @@ Default-Promotion.
 ## 8. Verweise
 
 - [Implementation Dossier](../dossiers/2026-07-31-codex-compaction-openviking-responses-id.md)
+- [Lessons Learned](../lessons/2026-07-31-codex-compaction-openviking-responses-lessons-learned.md)
 - [Open Items](../sessions/2026-07-31-codex-compaction-openviking-responses-open-items.md)
