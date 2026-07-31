@@ -42,8 +42,12 @@ Ein State wird erst nach einem vollständigen `response.completed` veröffentlic
   Verzeichnis und `0600` für Dateien;
 - Eigentümer-, Zielverzeichnis- und Symlink-Prüfungen für jede Komponente von
   `CODEX_HOME` bis zum State-Verzeichnis;
-- atomaren Austausch einer sicheren Temp-Datei;
-- maximal 64 KiB Eingabe und fünf Sekunden interne Laufzeitgrenze;
+- per Directory-FD verankerte Lese-, Schreib- und Austauschoperationen ohne
+  erneute Pfadauflösung nach der Prüfung;
+- atomaren Austausch einer sicheren Temp-Datei unter Prozess- und Thread-Lock;
+- maximal 64 KiB Eingabe und eine erzwungene externe Fünf-Sekunden-Deadline;
+- begrenzte Retention mit höchstens 256 Records, 24 Stunden TTL und maximal
+  1024 untersuchten Verzeichniseinträgen;
 - keine Repository-, Transcript-, Pfad- oder Dateinamen in der injizierten
   Ausgabe;
 - feste kleine Hinweise für PreCompact und `SessionStart(source=compact)`;
@@ -127,11 +131,11 @@ kanonische State-Byte-Bilanz einbezogen.
 
 | Evidenz | Ergebnis |
 |---|---|
-| Neue Hook- und State-Suiten | 92 bestanden, 0 fehlgeschlagen |
-| Core-Kombination | 122 gesammelt, 121 bestanden, 1 bestätigter Baseline-Fehler |
-| Erweiterte Kombination | 142 gesammelt, 130 bestanden, 12 bestätigte Baseline-Fehler |
+| Neue Hook- und State-Suiten | 102 bestanden, 0 fehlgeschlagen |
+| Core-Kombination | 132 gesammelt, 131 bestanden, 1 bestätigter Baseline-Fehler |
+| Erweiterte Kombination | 152 gesammelt, 140 bestanden, 12 bestätigte Baseline-Fehler |
 | Ruff Check | PASS |
-| Ruff Format Check | 6 Dateien formatiert |
+| Ruff Format Check | 8 Dateien formatiert |
 | Compileall | PASS |
 | `git diff --check` | PASS |
 | Shared OpenViking MCP | Health und read-only `search_experience` PASS |
@@ -163,7 +167,9 @@ Der Security-Re-Review Revision 2 hob das Offline-Kandidaten-Veto auf: keine
 offenen Critical-/High-Befunde, 95,6 % aggregiert und mindestens 91 % je
 Kriterium. Da das geforderte aktuelle Claude Opus nicht verfügbar war, ist die
 Bewertung mit einem Codex-Ersatzmodell vorläufig. Die verbleibenden
-Medium-Befunde stehen im Open-Item-Bericht.
+Medium-Befunde wurden in den Offline-Follow-ups `325e5cff` und `0556a9aa`
+geschlossen und durch 102/102 Kandidatentests verifiziert. Eine unabhängige
+Revalidierung vor Aktivierung bleibt wegen des Ersatzmodells erforderlich.
 
 ## 8. Verknüpfte Artefakte
 

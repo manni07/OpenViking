@@ -21,9 +21,11 @@ erst danach Provider-Abstraktion.
 Der Security-Re-Review Revision 2 hat keine offenen Critical-/High-Befunde und
 95,6 % aggregiert bei mindestens 91 % je Kriterium ergeben. Wegen
 Nichtverfügbarkeit des geforderten aktuellen Claude Opus ist der
-Codex-Ersatzreview vorläufig. Vorrangige Medium-Restarbeit sind stabile
-`client_id`-Bindings, cancellation-sicheres Async-Cleanup sowie
-TOCTOU-/Deadline-/Retention-Härtung vor einer Hook-Aktivierung.
+Codex-Ersatzreview vorläufig. Die damalige Medium-Restarbeit ist im
+Offline-Follow-up abgeschlossen: stabile Credential-Slot-Bindung auch ohne
+`client_id`, cancellation-sicheres Async-Cleanup sowie
+Directory-FD-/Deadline-/Retention-Härtung. Vor einer Hook-Aktivierung bleibt
+eine unabhängige Revalidierung erforderlich.
 
 ## 2. Vorschlag 1 — Reproduzierbarer A/B-Corpus
 

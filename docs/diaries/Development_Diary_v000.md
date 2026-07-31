@@ -52,7 +52,9 @@ stiller Capability-Fallback.
 Der Hook-Kandidat erhielt private Rechte, sichere atomare Dateien,
 komponentenweise Symlink- und Eigentümerprüfungen, Eingabe-/Zeitlimits und feste
 Prompts. Eine abschließende Pfadprüfung führte zu einem zusätzlichen
-Parent-Symlink-Test. Ergebnis: 24 Hook-Tests bestanden.
+Parent-Symlink-Test. Im Offline-Sicherheits-Follow-up wurden alle Dateioperationen
+an Directory-FDs verankert, die Deadline erzwungen und TTL-/Anzahl-/Scan-Limits
+für die Retention ergänzt. Ergebnis: 30 Hook-Tests bestanden.
 
 ### 4. Responses-Implementierung
 
@@ -61,9 +63,11 @@ Compaction-Reduktion, commit-on-complete, native Async-Streams, Tool exactly onc
 Bindings, Integrität und harte Limits. `CodexVLM` exponiert additive
 State-Methoden und einen expliziten Probe. Nach einem Security-Veto wurden
 Trace-Redaction, Adapter-Initialisierungsrace, Credential-I/O im Event-Loop und
-unbegrenzte retained Call-ID-Metadaten TDD-geführt gehärtet. Ergebnis: 68
-State-/Adaptertests
-bestanden.
+unbegrenzte retained Call-ID-Metadaten TDD-geführt gehärtet. Das Follow-up band
+Credentials stabil an ihren persistenten Slot, auch ohne `client_id`, und
+schirmte Stream-/Client-Cleanup gegen wiederholte Cancellation und Close-Fehler
+ab. Ein ergänzender Test stellt sicher, dass ein Close-Fehler die ursprüngliche
+Cancellation nicht verdeckt. Ergebnis: 72 State-/Adaptertests bestanden.
 
 ### 5. Konfiguration
 
@@ -73,8 +77,8 @@ werden abgelehnt. Der Default bleibt aus.
 
 ### 6. Verifikation
 
-Frische Kandidatensuiten: 92/92 PASS. Die Core-Kombination lieferte 121 PASS und
-einen Fehler; die erweiterte Kombination 130 PASS und zwölf Fehler. Der einzelne
+Frische Kandidatensuiten: 102/102 PASS. Die Core-Kombination lieferte 131 PASS und
+einen Fehler; die erweiterte Kombination 140 PASS und zwölf Fehler. Der einzelne
 Codex-Config-Fehler sowie elf Stream-Config-Fehler wurden auf der unveränderten
 Basis reproduziert. Ruff, Format, Compileall und `git diff --check` bestanden.
 
@@ -85,8 +89,12 @@ Backups.
 Der Security-Re-Review Revision 2 meldete keine offenen Critical-/High-Befunde
 und hob das Offline-Kandidaten-Veto auf. Score: 95,6 % aggregiert, mindestens
 91 % je Kriterium. Der Review ist wegen eines Codex-Ersatzmodells vorläufig; das
-geforderte aktuelle Claude Opus war nicht verfügbar. Drei Medium-Befunde bleiben
-in den Open Items.
+geforderte aktuelle Claude Opus war nicht verfügbar. Die drei Medium-Befunde
+wurden anschließend TDD-geführt im Commit
+`325e5cff3895036a2fc0e8a0a93131e77f7c9d0d` geschlossen und mit Commit
+`0556a9aac049d2563893e1abe4068c0260024542` um den kombinierten
+Cancellation-/Close-Fehlerfall ergänzt. Eine unabhängige
+Revalidierung bleibt vor Aktivierung erforderlich.
 
 ## Entscheidungen
 

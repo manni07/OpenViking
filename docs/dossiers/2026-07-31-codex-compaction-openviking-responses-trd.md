@@ -150,16 +150,16 @@ Tool-Call-IDs zählen zur kanonischen State-Byte-Grenze.
 | Native Async | Async-Adapter | Sync/Async-Parität PASS |
 | Tool exactly once | Open-/Seen-ID-Vertrag | Replay-Tests PASS |
 | Limits/TTL/Chains | Lokale Guards | Boundary-Tests PASS |
-| Hook-Härtung | Quellkontrolliertes Tool | 24 Hook-Tests PASS |
+| Hook-Härtung | Quellkontrolliertes Tool | 30 Hook-Tests PASS |
 | Legacy default | Opt-in Config | Core bis auf Baseline-Fehler |
 | Live Capability | Expliziter Probe | **HOLD: nicht genehmigt/ausgeführt** |
 
 ## 7. Verification Baseline
 
 ```text
-Neue Suiten:       92 passed
-Core kombiniert:  121 passed, 1 failed (122 collected)
-Erweitert:         130 passed, 12 failed (142 collected)
+Neue Suiten:       102 passed
+Core kombiniert:  131 passed, 1 failed (132 collected)
+Erweitert:         140 passed, 12 failed (152 collected)
 Ruff check:        PASS
 Ruff format:       PASS
 compileall:        PASS
@@ -189,6 +189,15 @@ und hebt das Offline-Kandidaten-Veto auf. Er bewertete den Kandidaten mit 95,6 %
 aggregiert und mindestens 91 % je Kriterium. Die Bewertung ist vorläufig, weil
 das geforderte aktuelle Claude Opus nicht verfügbar war und Codex als
 Ersatzmodell eingesetzt wurde.
+
+Die drei Medium-Restbefunde aus diesem Review wurden anschließend offline
+geschlossen: eine stabile Credential-Slot-Bindung funktioniert auch ohne
+`client_id`, Async-Ressourcen werden trotz wiederholter Cancellation vollständig
+geschlossen, und der Hook verwendet Directory-FD-Verankerung, eine erzwungene
+Deadline sowie begrenzte Retention. Evidenz: Follow-up-Commit
+`325e5cff3895036a2fc0e8a0a93131e77f7c9d0d`, ergänzende
+Cancellation-Fehlerpriorität in `0556a9aac049d2563893e1abe4068c0260024542`
+und 102/102 Kandidatentests.
 
 ## 9. Artefakte
 

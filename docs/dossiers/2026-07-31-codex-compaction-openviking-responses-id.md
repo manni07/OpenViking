@@ -18,10 +18,12 @@ Der Worktree enthält einen minimal additiven Kandidaten:
   `openviking/models/vlm/backends/codex_vlm.py`;
 - zwei opt-in Konfigurationsfelder in
   `openviking_cli/utils/config/vlm_config.py`;
-- 92 neue Offline-Tests.
+- 102 neue Offline-Tests.
 
 Es wurden keine globalen Codex-Dateien verändert, keine Funktion aktiviert und
-kein Provider-Call, Restart, Commit, Push oder Merge ausgeführt.
+kein Provider-Call, Restart, Push oder Merge ausgeführt. Die isolierte Branch
+enthält die gezielten Implementierungs-Commits `a84a3730`, `325e5cff` und
+`0556a9aa`.
 
 ## 2. Implementierungsentscheidungen
 
@@ -32,6 +34,10 @@ Der Hook schreibt nur private Korrelationsmetadaten. Jede Pfadkomponente von
 Eigentümer, Typ und Rechte werden validiert; Dateien werden atomar mit `0600` in
 einem `0700`-Verzeichnis veröffentlicht. Eingabe und Laufzeit sind begrenzt.
 Prompts enthalten ausschließlich feste, kleine Hinweise.
+
+Das Offline-Follow-up verankert alle Operationen an geöffneten Directory-FDs,
+erzwingt die Fünf-Sekunden-Deadline über den gesamten Hook und begrenzt alte
+Korrelationsmetadaten durch TTL-, Anzahl- und Scan-Limits.
 
 ### 2.2 Responses-State
 
@@ -72,8 +78,8 @@ stillen Fallback und kein Failover innerhalb einer Chain.
 | `codex_responses_adapter.py` | State, Reducer, Limits, Sync/Async Adapter |
 | `codex_vlm.py` | Additive öffentliche Methoden und Probe |
 | `vlm_config.py` | Opt-in State-/Threshold-Konfiguration |
-| `test_codex_compaction_hook.py` | 24 Hook-Sicherheitsfälle |
-| `test_codex_responses_state.py` | 68 State-/Adapterfälle |
+| `test_codex_compaction_hook.py` | 30 Hook-Sicherheitsfälle |
+| `test_codex_responses_state.py` | 72 State-/Adapterfälle |
 
 `VLMBase` und andere Provider wurden nicht geändert.
 
@@ -81,9 +87,9 @@ stillen Fallback und kein Failover innerhalb einer Chain.
 
 | Prüfung | Ergebnis |
 |---|---|
-| Neue Suiten | 92/92 PASS |
-| Core-Kombination | 121 PASS, 1 bestätigter Baseline-Fehler |
-| Erweiterte Kombination | 130 PASS, 12 bestätigte Baseline-Fehler |
+| Neue Suiten | 102/102 PASS |
+| Core-Kombination | 131 PASS, 1 bestätigter Baseline-Fehler |
+| Erweiterte Kombination | 140 PASS, 12 bestätigte Baseline-Fehler |
 | Ruff Check / Format | PASS / PASS |
 | Compileall | PASS |
 | Diff-Check | PASS |
@@ -103,7 +109,7 @@ Dies ist eine dossierbasierte Selbstprüfung, keine unabhängige Live-Evidenz.
 | Korrektheit | 97 % | Verträge und Failure Paths durch Tests abgedeckt |
 | Integration | 96 % | Additive Pfade, bestehender Default erhalten |
 | Sicherheit | 97 % | Bindings, Limits, Hook-Pfad und Log-Sentinels |
-| Testbarkeit | 98 % | 92 deterministische neue Tests |
+| Testbarkeit | 98 % | 102 deterministische neue Tests |
 | Performance | 92 % | Harte Limits; kein realer Long-Horizon-Benchmark |
 | Wartbarkeit | 95 % | Provider-spezifisch, keine `VLMBase`-Ausweitung |
 | Beobachtbarkeit | 94 % | Typisierte Fehler, absichtlich keine State-Logs |
@@ -118,11 +124,18 @@ Der fehlende Live- und A/B-Nachweis bleibt dennoch HOLD.
 Keine offenen Critical-/High-Befunde; das Offline-Kandidaten-Veto ist aufgehoben.
 Bewertung: 95,6 % aggregiert, mindestens 91 % je Kriterium. Das geforderte
 aktuelle Claude Opus war nicht verfügbar, deshalb ist der Review mit Codex als
-Ersatzmodell vorläufig. Drei Medium-Restbefunde bleiben offen:
+Ersatzmodell vorläufig. Die drei Medium-Restbefunde sind im Offline-Follow-up
+`325e5cff3895036a2fc0e8a0a93131e77f7c9d0d` geschlossen und mit
+`0556a9aac049d2563893e1abe4068c0260024542` um die Cancellation-Fehlerpriorität
+ergänzt:
 
-- `client_id` ist durch den Credential-Resolver nicht garantiert;
-- Async-Cleanup ist gegen wiederholte Cancellation nicht abgeschirmt;
-- eine spätere Hook-Aktivierung hat TOCTOU-, Deadline- und Retention-Risiken.
+- stabile Credential-Slot-Bindung auch ohne `client_id`;
+- abgeschirmtes Async-Cleanup trotz wiederholter Cancellation und Close-Fehlern;
+- Directory-FD-verankerter Hook mit erzwungener Deadline und begrenzter
+  Retention.
+
+Die neuen Regressionstests sind Bestandteil der 102/102 bestandenen
+Kandidatentests. Eine unabhängige Revalidierung vor Aktivierung bleibt offen.
 
 ## 6. Harte HOLDs
 
