@@ -353,6 +353,34 @@ def _item_get(obj: Any, key: str, default: Any = None) -> Any:
     return default if value is None else value
 
 
+async def _close_async_resources_cancellation_safe(*resources: Any) -> None:
+    """Finish all async closes before propagating any repeated cancellation."""
+
+    async def close_all() -> None:
+        first_error: BaseException | None = None
+        for resource in resources:
+            close = getattr(resource, "aclose", None)
+            if callable(close):
+                try:
+                    await close()
+                except BaseException as exc:
+                    if first_error is None:
+                        first_error = exc
+        if first_error is not None:
+            raise first_error
+
+    cleanup = asyncio.create_task(close_all())
+    cancellation: asyncio.CancelledError | None = None
+    while not cleanup.done():
+        try:
+            await asyncio.shield(cleanup)
+        except asyncio.CancelledError as exc:
+            cancellation = exc
+    cleanup.result()
+    if cancellation is not None:
+        raise cancellation
+
+
 def _build_chat_completion_like_response(final_response: Any, model: str) -> Any:
     text_parts: List[str] = []
     tool_calls: List[Any] = []
@@ -1203,28 +1231,22 @@ class CodexAsyncCompletionsAdapter:
                 client = self._sync_adapter._async_client_factory()
                 if asyncio.iscoroutine(client):
                     client = await client
+                stream = None
                 try:
                     stream = await client.responses.create(**request)
                     completed_response = None
                     completed_count = 0
-                    try:
-                        async for event in stream:
-                            event_type = _item_get(event, "type", "")
-                            if event_type == "response.completed":
-                                completed_count += 1
-                                if completed_count > 1:
-                                    raise CodexStateValidationError(
-                                        "Codex stream emitted duplicate completion events."
-                                    )
-                                completed_response = _item_get(event, "response")
-                    finally:
-                        close = getattr(stream, "aclose", None)
-                        if callable(close):
-                            await close()
+                    async for event in stream:
+                        event_type = _item_get(event, "type", "")
+                        if event_type == "response.completed":
+                            completed_count += 1
+                            if completed_count > 1:
+                                raise CodexStateValidationError(
+                                    "Codex stream emitted duplicate completion events."
+                                )
+                            completed_response = _item_get(event, "response")
                 finally:
-                    close = getattr(client, "aclose", None)
-                    if callable(close):
-                        await close()
+                    await _close_async_resources_cancellation_safe(stream, client)
                 turn = self._sync_adapter._commit_state(
                     state=state,
                     completed_response=completed_response,

@@ -395,6 +395,7 @@ def test_codex_auth_refresh_uses_persisted_client_id(tmp_path, monkeypatch):
     creds = resolve_codex_runtime_credentials(force_refresh=True)
 
     assert creds["source"] == "openviking"
+    assert creds["client_id"] == "app_persisted_client"
     assert recorded["client_id"] == "app_persisted_client"
 
 

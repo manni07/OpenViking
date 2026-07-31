@@ -13,6 +13,7 @@ import json
 import os
 import subprocess
 import sys
+import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from types import ModuleType
@@ -258,6 +259,32 @@ def test_state_parent_symlink_is_rejected_without_writing_outside_codex_home(
     assert list(outside.iterdir()) == []
 
 
+def test_anchored_state_directory_resists_path_swap_after_open(
+    hook_module: ModuleType,
+    tmp_path: Path,
+):
+    """A directory rename plus symlink swap must not redirect an anchored write."""
+    codex_home = tmp_path / "codex"
+    state_root = _state_root(hook_module, codex_home)
+    displaced = tmp_path / "opened-state"
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    directory_fd = hook_module._open_private_state_root(codex_home)
+    try:
+        state_root.rename(displaced)
+        state_root.symlink_to(outside, target_is_directory=True)
+        hook_module._atomic_write(
+            directory_fd,
+            "a" * 64 + ".json",
+            {"schema": 1, "prepared": True},
+        )
+    finally:
+        os.close(directory_fd)
+
+    assert list(outside.iterdir()) == []
+    assert json.loads((displaced / ("a" * 64 + ".json")).read_text(encoding="utf-8"))
+
+
 def test_preexisting_record_symlink_is_rejected_and_target_is_unchanged(
     hook_module: ModuleType,
     tmp_path: Path,
@@ -336,6 +363,105 @@ def test_parallel_duplicate_event_is_idempotent_and_never_partially_written(
     records = _records(hook_module, codex_home)
     assert len(records) == 1
     assert json.loads(records[0].read_text(encoding="utf-8"))
+
+
+def test_record_retention_is_bounded_by_count(hook_module: ModuleType, tmp_path: Path):
+    """Unique sessions cannot grow private correlation storage without a hard bound."""
+    limit = int(hook_module.MAX_RECORDS)
+    assert 8 <= limit <= 512
+    codex_home = tmp_path / "codex"
+
+    for index in range(limit + 3):
+        output = hook_module.process_event(
+            _event(session_id=f"session-{index}", turn_id=f"turn-{index}"),
+            codex_home=codex_home,
+        )
+        assert output["continue"] is True
+
+    assert len(_records(hook_module, codex_home)) == limit
+
+
+def test_parallel_retention_pruning_is_idempotent(hook_module: ModuleType, tmp_path: Path):
+    """Concurrent pruning may race, but stale-name removal must remain idempotent."""
+    limit = int(hook_module.MAX_RECORDS)
+    codex_home = tmp_path / "codex"
+    for index in range(limit):
+        assert (
+            hook_module.process_event(
+                _event(session_id=f"seed-{index}", turn_id=f"seed-{index}"),
+                codex_home=codex_home,
+            )["continue"]
+            is True
+        )
+
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        outputs = list(
+            pool.map(
+                lambda index: hook_module.process_event(
+                    _event(session_id=f"parallel-{index}", turn_id=f"parallel-{index}"),
+                    codex_home=codex_home,
+                ),
+                range(16),
+            )
+        )
+
+    assert all(output["continue"] is True for output in outputs)
+    assert len(_records(hook_module, codex_home)) == limit
+
+
+def test_record_retention_removes_expired_metadata(hook_module: ModuleType, tmp_path: Path):
+    """Correlation metadata older than the reviewed TTL is deleted on the next event."""
+    ttl = float(hook_module.RECORD_TTL_SECONDS)
+    assert 60 <= ttl <= 7 * 24 * 60 * 60
+    codex_home = tmp_path / "codex"
+    hook_module.process_event(_event(), codex_home=codex_home)
+    expired = _records(hook_module, codex_home)[0]
+    old = time.time() - ttl - 1
+    os.utime(expired, (old, old))
+
+    output = hook_module.process_event(
+        _event(session_id="fresh-session", turn_id="fresh-turn"),
+        codex_home=codex_home,
+    )
+
+    assert output["continue"] is True
+    assert expired.exists() is False
+
+
+def test_external_deadline_interrupts_blocking_hook_work(hook_module: ModuleType):
+    """The hook must fail before the outer timeout even when an operation blocks."""
+    started = time.monotonic()
+
+    with pytest.raises(TimeoutError):
+        hook_module._run_with_deadline(0.05, lambda: time.sleep(0.5))
+
+    assert time.monotonic() - started < 0.25
+
+
+def test_rejected_private_directory_does_not_leak_file_descriptors(
+    hook_module: ModuleType,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """A failed child-directory validation must close every descriptor it opened."""
+    fd_root = Path("/dev/fd")
+    if not fd_root.is_dir():
+        pytest.skip("descriptor accounting is unavailable")
+    original = hook_module._validate_private_directory
+
+    def reject_child(directory_fd: int, *, exact_mode: bool) -> None:
+        original(directory_fd, exact_mode=exact_mode)
+        if exact_mode:
+            raise OSError("rejected child")
+
+    monkeypatch.setattr(hook_module, "_validate_private_directory", reject_child)
+    before = len(list(fd_root.iterdir()))
+
+    for index in range(20):
+        with pytest.raises(OSError, match="rejected child"):
+            hook_module._open_private_state_root(tmp_path / f"codex-{index}")
+
+    assert len(list(fd_root.iterdir())) <= before + 1
 
 
 def test_postcompact_requires_matching_precompact_and_only_checks_invariants(
