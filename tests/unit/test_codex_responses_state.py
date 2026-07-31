@@ -1368,6 +1368,13 @@ class FailingCloseAsyncStream(FakeAsyncStream):
         raise RuntimeError("stream close failed")
 
 
+class BlockingFailingCloseAsyncStream(BlockingCloseAsyncStream):
+    async def aclose(self) -> None:
+        self._close_started.set()
+        await self._close_release.wait()
+        raise RuntimeError("stream close failed during cancellation")
+
+
 def _async_adapter(
     async_client: FakeAsyncClient,
     *,
@@ -1501,6 +1508,42 @@ async def test_async_stream_close_failure_still_closes_client():
             messages=[{"role": "user", "content": "close failure"}],
         )
 
+    assert async_client.close_calls == 1
+
+
+@pytest.mark.asyncio
+async def test_async_close_failure_does_not_mask_request_cancellation():
+    """Cleanup errors must not replace the cancellation that initiated cleanup."""
+    iteration_started = asyncio.Event()
+    iteration_release = asyncio.Event()
+    close_started = asyncio.Event()
+    close_release = asyncio.Event()
+    stream = BlockingFailingCloseAsyncStream(
+        _events([_message("never published")]),
+        entered=iteration_started,
+        release=iteration_release,
+        close_started=close_started,
+        close_release=close_release,
+    )
+    async_client = FakeAsyncClient([stream])
+    async_adapter, _sync_holder = _async_adapter(async_client)
+    task = asyncio.create_task(
+        async_adapter.create_with_state(
+            state=None,
+            expected_generation=None,
+            model=MODEL,
+            instructions=INSTRUCTIONS,
+            messages=[{"role": "user", "content": "cancel with close failure"}],
+        )
+    )
+    await iteration_started.wait()
+
+    task.cancel()
+    await close_started.wait()
+    close_release.set()
+
+    with pytest.raises(asyncio.CancelledError):
+        await task
     assert async_client.close_calls == 1
 
 

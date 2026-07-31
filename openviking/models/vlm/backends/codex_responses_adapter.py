@@ -376,9 +376,15 @@ async def _close_async_resources_cancellation_safe(*resources: Any) -> None:
             await asyncio.shield(cleanup)
         except asyncio.CancelledError as exc:
             cancellation = exc
-    cleanup.result()
+    cleanup_error: BaseException | None = None
+    try:
+        cleanup.result()
+    except BaseException as exc:
+        cleanup_error = exc
     if cancellation is not None:
         raise cancellation
+    if cleanup_error is not None:
+        raise cleanup_error
 
 
 def _build_chat_completion_like_response(final_response: Any, model: str) -> Any:
@@ -1232,6 +1238,7 @@ class CodexAsyncCompletionsAdapter:
                 if asyncio.iscoroutine(client):
                     client = await client
                 stream = None
+                request_cancelled = False
                 try:
                     stream = await client.responses.create(**request)
                     completed_response = None
@@ -1245,8 +1252,15 @@ class CodexAsyncCompletionsAdapter:
                                     "Codex stream emitted duplicate completion events."
                                 )
                             completed_response = _item_get(event, "response")
+                except asyncio.CancelledError:
+                    request_cancelled = True
+                    raise
                 finally:
-                    await _close_async_resources_cancellation_safe(stream, client)
+                    try:
+                        await _close_async_resources_cancellation_safe(stream, client)
+                    except (Exception, asyncio.CancelledError):
+                        if not request_cancelled:
+                            raise
                 turn = self._sync_adapter._commit_state(
                     state=state,
                     completed_response=completed_response,
