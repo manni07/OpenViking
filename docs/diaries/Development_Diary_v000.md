@@ -3,7 +3,7 @@
 ## Codex-Compaction und OpenViking Responses State
 
 Datum: 2026-07-31
-Status: Kandidat implementiert; keine Live-Aktivierung
+Status: Offline-Kandidat vorhanden; Legacy-VLM-H3, Security und Live auf HOLD
 
 ## Ausgangslage
 
@@ -67,15 +67,17 @@ Der gemeinsame OpenViking-MCP bestand Health und eine read-only Suche ohne
 Restart. Globale Codex-Dateien blieben identisch zu den SHA-256-verifizierten
 Backups.
 
-Der Security-Re-Review Revision 2 meldete keine offenen Critical-/High-Befunde
-und hob das Offline-Kandidaten-Veto auf. Score: 95,6 % aggregiert, mindestens
-91 % je Kriterium. Der Review ist wegen eines Codex-Ersatzmodells vorläufig; das
-geforderte aktuelle Claude Opus war nicht verfügbar. Die drei Medium-Befunde
-wurden anschließend TDD-geführt im Commit
-`325e5cff3895036a2fc0e8a0a93131e77f7c9d0d` geschlossen und mit Commit
-`0556a9aac049d2563893e1abe4068c0260024542` um den kombinierten
-Cancellation-/Close-Fehlerfall ergänzt. Eine unabhängige
-Revalidierung bleibt vor Aktivierung erforderlich.
+Der separate Legacy-VLM-H3-Sicherheitsreview durchlief die maximal drei
+Revisionen: 78/100 (`0C/5H/1M`), 84/100 (`0C/3H/1M`) und final 89/100
+(`0C/1H/1M`). H2–H5 wurden geschlossen; H1, der exakte Konstantenvertrag für
+markierte VikingBot-Fehler, blieb offen. Damit wurden `0H` und 90/100 verfehlt.
+Source-Unlock wurde verweigert; es erfolgte keine Produktionscodeänderung und
+keine vierte H1-Schließungsrevision. Die sechs ergänzten Vertrags-Testdateien
+wurden final mit `266 collected = 129 PASS + 137 fachliche RED` ausgeführt.
+
+OpenViking MCP Health und ein echter read-only `search_experience`-Aufruf waren
+PASS, ohne Restart. Diese Evidenz beweist MCP-Zugriff, nicht die Responses-/
+Compaction-Fähigkeit des Providers. Der User vertagte den Live-Provider-Test.
 
 ## Entscheidungen
 
@@ -86,16 +88,22 @@ Revalidierung bleibt vor Aktivierung erforderlich.
   ausdrückliche Genehmigung benötigt.
 - Ohne 20 reale und 10 synthetische Szenarien gibt es keine A/B-Siegerwahl.
 - Vorbestehende Legacy-Fehler werden sichtbar als HOLD geführt.
+- Der finale H3-Security-HOLD bleibt bestehen; H1 wird in diesem Lauf nicht
+  weiter revidiert oder implementiert.
+- Der bestandene MCP-Read ist kein Ersatz für einen Provider-Capability-Probe.
+- Der Live-Test wurde auf Wunsch des Users vertagt.
 - Keine Installation, Aktivierung, Promotion, kein Restart und kein Git-Publish.
 
 ## Ergebnis
 
 Der Worktree enthält einen offline verifizierten, opt-in Kandidaten und die
-zugehörige Übergabedokumentation. Live-Capability, A/B-Effekt und Default-Promotion
-sind ausdrücklich nicht bewiesen.
+zugehörige Übergabedokumentation. Der Legacy-VLM-H3-Follow-up bleibt wegen H1
+bei verweigertem Source-Unlock auf HOLD. Live-Capability, A/B-Effekt und
+Default-Promotion sind ausdrücklich nicht bewiesen.
 
 ## Verweise
 
 - [Implementation Dossier](../dossiers/2026-07-31-codex-compaction-openviking-responses-id.md)
 - [Test Dossier](../tests/2026-07-31-codex-compaction-openviking-responses-td.md)
+- [Lessons Learned](../lessons/2026-07-31-codex-compaction-openviking-responses-lessons-learned.md)
 - [Open Items](../sessions/2026-07-31-codex-compaction-openviking-responses-open-items.md)

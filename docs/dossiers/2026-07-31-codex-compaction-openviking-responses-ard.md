@@ -3,7 +3,7 @@
 ## Codex-Compaction und OpenViking Responses State
 
 Stand: 2026-07-31
-Status: Implementierter, offline verifizierter Kandidat; Aktivierung und Live-Promotion auf HOLD
+Status: Responses-Kandidat offline verifiziert; Legacy-VLM-H3-Source, Aktivierung und Live auf HOLD
 Basis: `60ef45d4c3a7d07ceb1df4e9d7dde7a14449ac50`
 
 ## 1. Ergebnis
@@ -163,13 +163,15 @@ freigegeben. Folgende HOLDs sind zwingend:
 Die Default-Promotion bleibt ein separater Evidenzentscheid. Ein Restart von
 Rechner, Server, Runtime oder Service ist weder erforderlich noch autorisiert.
 
-Der Security-Re-Review Revision 2 hob das Offline-Kandidaten-Veto auf: keine
+Der frühere Security-Re-Review Revision 2 des Responses-State-Kandidaten hob
+dessen Offline-Veto auf: keine
 offenen Critical-/High-Befunde, 95,6 % aggregiert und mindestens 91 % je
 Kriterium. Da das geforderte aktuelle Claude Opus nicht verfügbar war, ist die
 Bewertung mit einem Codex-Ersatzmodell vorläufig. Die verbleibenden
 Medium-Befunde wurden in den Offline-Follow-ups `325e5cff` und `0556a9aa`
 geschlossen und durch 102/102 Kandidatentests verifiziert. Eine unabhängige
-Revalidierung vor Aktivierung bleibt wegen des Ersatzmodells erforderlich.
+Revalidierung vor Aktivierung bleibt wegen des Ersatzmodells erforderlich. Diese
+frühere Bewertung ist nicht das spätere Legacy-VLM-H3-Security-Urteil.
 
 ## 8. Verknüpfte Artefakte
 
@@ -179,3 +181,189 @@ Revalidierung vor Aktivierung bleibt wegen des Ersatzmodells erforderlich.
 - [Test Dossier](../tests/2026-07-31-codex-compaction-openviking-responses-td.md)
 - [Open Items](../sessions/2026-07-31-codex-compaction-openviking-responses-open-items.md)
 - [Manual](../manuals/2026-07-31-codex-compaction-openviking-responses-manual.html)
+
+## 9. Legacy-VLM-H3-Follow-up — 2026-07-31
+
+### 9.1 Anlass und Evidenzgrenze
+
+Dieser Follow-up erweitert die historische Kampagne, ersetzt aber keine frühere
+Evidenz. Er plant ausschließlich die Auflösung von H3: zwei veraltete
+Testverträge mit exaktem `Dict`-Vergleich und die durch einen Upstream-Verlauf
+entfernte OpenAI-kompatible Streaming-Unterstützung.
+
+Die kontrollierte Offline-Ausgangslage lautet:
+
+| Matrix | Ergebnis | Einordnung |
+|---|---:|---|
+| Gezielte Legacy-Baseline | 46 gesammelt, 33 PASS, 13 FAIL | 2 stale Exact-`Dict`-Assertions und 11 Streaming-Fehler |
+| Breitere VLM-Matrix | 216 gesammelt, 195 PASS, 21 FAIL | enthält zusätzlich 8 vorbestehende VolcEngine-Konstruktor-Testfehler |
+
+Die acht VolcEngine-Fehler liegen außerhalb der autorisierten zwei Reparaturen.
+Sie dürfen weder still mitbehoben noch zur grünen H3-Aussage umetikettiert
+werden. Ein separater Befund bleibt erforderlich.
+
+### 9.2 Root Cause und Architekturentscheidung
+
+Commit `d739a5be` führte `stream` für OpenAI-kompatible Text-/Vision-Aufrufe,
+Sync/Async-Verarbeitung und zugehörige Tests ein. Commit `44d3cc41` entfernte
+den Request-Parameter und die Stream-Reducer wieder, während
+`VLMBase.stream` und die historischen Tests erhalten blieben. Dadurch ist der
+Produktionsvertrag zwischen Basis, Backend und Tests auseinandergefallen.
+
+Für die beiden stale Exact-`Dict`-Assertions ist keine Produktionsänderung an
+`openviking_cli/utils/config/vlm_config.py` gerechtfertigt. Die normalisierte
+Provider-Konfiguration enthält absichtlich Defaultfelder; die Tests müssen den
+relevanten Vertrag prüfen statt vollständige interne Dictionaries festzunageln.
+`VLMConfig` bleibt in diesem Follow-up unverändert.
+
+Die Streaming-Reparatur ist dagegen absichtlich cross-layer:
+
+```text
+VLMBase.stream und Responsevertrag
+        ↓
+OpenAIVLM Request + Sync/Async Stream-Reducer + Cleanup
+        ↓
+model_retry definiert mark_vlm_error_non_retryable()/is_vlm_error_non_retryable()
+        ↓
+VLMBase importiert/prüft Marker; VikingBot markiert native Streamereignisse
+        ↓
+Contract-/Regressionstests
+```
+
+Erforderlicher Produktionsscope:
+
+- `openviking/models/vlm/backends/openai_vlm.py`;
+- `openviking/utils/model_retry.py`;
+- `openviking/models/vlm/base.py` nur für Import und Fail-closed-Prüfung der
+  in `model_retry.py` definierten Marker;
+- `bot/vikingbot/providers/vlm_adapter.py` für den Adapter-Retry-Guard und die
+  Fortschrittsmarkierung nach jedem gelesenen Ereignis im bereits vorhandenen
+  nativen VolcEngine-Stream;
+- keine Änderung an `VLMConfig` und keine Reparatur der acht separaten
+  VolcEngine-Konstruktor-Testfehler.
+
+### 9.3 Verbindlicher Streaming-Vertrag
+
+1. **Preflight und Request:** `stream=True` zusammen mit `tools` wird in Sync und
+   Async vor `get_client()`, Credentialauflösung oder Netzwerkzugriff laut
+   abgelehnt. Für toolfreie Text- und Vision-Aufrufe wird das explizite
+   `stream`-Flag aus `VLMBase` übergeben; Default bleibt `False`.
+   Provider-native Retries bleiben deaktiviert.
+2. **String-Content und Usage:** Ausschließlich String-Content-Deltas werden in
+   Reihenfolge genau einmal zusammengefügt; eine Aggregation von Reasoning-Text-
+   Deltas wird nicht zugesagt. Leere oder usage-only Chunks sind zulässig.
+   Prompt-, Completion-, Cache- und Reasoning-Token-Details werden höchstens
+   einmal aus der letzten belastbaren Usage-Angabe veröffentlicht.
+3. **Tools:** Es gibt in diesem Follow-up keine Tool-Delta-Aggregation. Tools
+   bleiben ausschließlich im bestehenden Non-Streaming-Pfad mit
+   `VLMResponse`. Die Kombination `stream=True` plus Tools ist ein lokaler
+   Contract-Fehler ohne Clienterzeugung oder Provideraufruf.
+4. **Sync/Async-Parität:** Text-, Vision-, Usage-, Fehler-, Cleanup- und
+   Leerstream-Semantik müssen für Iterator und Async-Iterator übereinstimmen.
+5. **Cleanup:** Jeder eröffnete Stream wird in `finally` genau einmal geschlossen
+   — bei Erfolg, Iteratorfehler, Parserfehler und Cancellation. Für OpenAI SDK
+   2.30.0 bevorzugt Async das awaitbare `close()`; `aclose()` ist nur ein
+   kompatibler Fallback, wenn `close` fehlt. Cleanup bleibt cancellation-sicher
+   und überschreibt weder Primärfehler noch `CancelledError`.
+6. **Lokaler Retry:** `OpenAIVLM` wiederholt ausschließlich Fehler der
+   Stream-Erstellung. Iterator-, Parsing- und Cleanup-Fehler werden lokal nie
+   wiederholt, auch nicht vor dem ersten Ereignis.
+7. **Äußerer Failover und No-Replay:** Ein äußerer Failover darf einen
+   Iteratorfehler vor dem ersten Stream-Ereignis weiterhin klassifizieren. Nach
+   dem ersten Ereignis markiert OpenAIVLM den Fehler mit
+   `mark_vlm_error_non_retryable(exc)`. Die Erkennung folgt `__cause__`,
+   `__context__` und aggregierten `AllCredentialsFailedError`-Einträgen; alle
+   Wrapper prüfen `is_vlm_error_non_retryable(exc)` vor Klassifikation,
+   Callback oder Zustandsänderung und dürfen den Turn niemals replayen.
+8. **Adaptergrenze:** VikingBot darf nur vor dem ersten Ereignis seine bestehende
+   Fehlerklassifikation anwenden. `chat` prüft den Marker vor seiner
+   Retryklassifikation; der native VolcEngine-Pfad markiert Fortschritt nach
+   jedem aus dem Iterator gelesenen Ereignis. Nach einem Teilstream darf weder
+   Adapter noch Failover denselben Turn erneut senden. Dies ist ausdrücklich
+   keine Reparatur des VolcEngine-Konstruktors.
+
+### 9.4 Live- und Betriebsgrenze
+
+Es wird kein neuer API-Key bereitgestellt. Alle OpenAI-/Codex-Live-Provider-
+Requests bleiben **HOLD**. Online-Tests sind grundsätzlich autorisiert, dürfen
+aber erst starten, wenn Credential, exakter HTTPS-Origin, Kostenbudget und
+Secret-Handling separat positiv gegated sind. Dieser Follow-up autorisiert
+weder Restart noch Hook-/State-Aktivierung, Canary, Merge oder Promotion.
+
+### 9.5 Architektur-Risiken
+
+| Risiko | Mindestens drei Mitigationen |
+|---|---|
+| Doppelter Providerturn nach Teilstream | Fortschritt ab erstem Chunk markieren; Retry-Helper fail-closed prüfen; VikingBot-No-Replay-Regressionstest |
+| Ressourcenleck oder falsche Fehlerpriorität | `finally`-Cleanup; genau-einmal Close-Guard; primären Fehler/Cancellation vor Cleanup-Fehler bewahren |
+| Tool-Stream gelangt bis Client oder Netzwerk | Guard vor `get_client()`; Sync-/Async-Call-Count null testen; Tools nur im Non-Streaming-Vertrag belassen |
+| Scope-Creep in Konfiguration oder VolcEngine | `VLMConfig` unverändert lassen; acht VolcEngine-Fehler separat reporten; Diff-Scope vor Freigabe prüfen |
+| Unbelegte Live-Aussage | Live-Gate explizit HOLD; keine Credentials erzeugen/erfragen; Offline- und Provider-Evidenz getrennt ausweisen |
+
+## 10. Security Review Revision 1 — 2026-07-31
+
+### 10.1 Urteil und VETO
+
+| Score | Critical | High | Medium | Entscheidung |
+|---:|---:|---:|---:|---|
+| 78/100 | 0 | 5 | 1 | **Security VETO; Source gesperrt** |
+
+Die H3-Architektur ist erst implementierungsfähig, wenn H1–H5 in TRD, ID und TD
+normativ geschlossen sind. Bis dahin dürfen weder Produktions- noch Testdateien
+geändert werden. Ein Re-Review hebt das VETO nur bei `0 Critical`, `0 High` und
+mindestens 90/100 auf.
+
+### 10.2 Verbindliche Architekturkorrekturen
+
+| ID | Schutzziel | Verbindlicher Architekturentscheid |
+|---|---|---|
+| H1 | Keine Fehlerdaten-Exfiltration | Markierte VikingBot-Fehler erscheinen weder per `str` noch `repr` in Response, Logger oder Langfuse; nur feste redigierte Meldung und feste Kategorie, mit Sentinel-Capture belegt |
+| H2 | Begrenzte Marker-Grapharbeit | Harte Budgets: 256 Nodes, 512 Edges, 256 Aggregate-Kinder; beide Cause-/Context-Kanten und alle Aggregate-Kinder; Budgetüberschreitung oder unlesbare/malformed Struktur liefert fail-closed `True` |
+| H3 | Tool-Stream-Preflight an der äußersten Grenze | Failover/MultiCredential validieren rekursiv vor Selection, Provider und State; ein mögliches `stream=True` oder heterogene/unklare Streammodi schlagen fail-closed fehl |
+| H4 | Marker-Fast-Fail ohne Catch-Mutation | Primary, aktives Backup, aktives Credential ungleich null und failback-due werden in Text/Vision Sync/Async abgedeckt; nach Provider-Snapshot identischer Rethrow und null Catch-Side-Effects |
+| H5 | Deterministisches Cancellation-Cleanup | Gepatchte Shield-Barrieren, vorerzeugte Cancellation-Objekte, genau ein Cleanup-Task/Close, vollständige Prioritätsmatrix und keine Orphan-Task |
+| M1 | Kontrollierter Live-Egress | Live bleibt HOLD bis exakter HTTPS-Allowlist-Origin, ein Credential-Slot-Fingerprint, Modell/Vision/Capabilities und numerische Request-/Output-/Bild-/Kostenlimits feststehen; kein Failover/Retry |
+
+Der MCP-Handshake bleibt ein separater read-only Betriebsnachweis und kann M1
+nicht erfüllen. Bestehende Verbote für Restart, Merge, Aktivierung und Promotion
+bleiben unverändert.
+
+## 11. Security Reviews Revision 2 und 3 — 2026-07-31
+
+| Revision | Score | Befunde | Urteil |
+|---|---:|---:|---|
+| 1 | 78/100 | 0C / 5H / 1M | VETO |
+| 2 | 84/100 | 0C / 3H / 1M | VETO; H4/H5 auf Definitionsebene geschlossen |
+| 3 | 89/100 | 0C / 1H / 1M | HOLD; H2–H5 geschlossen, H1 offen |
+
+Revision 3 schloss H2–H5, ließ H1 jedoch offen. Source und Tests bleiben
+gesperrt. M1 bleibt unverändert HOLD. Das finale Gate `0 Critical`, `0 High` und
+mindestens 90/100 wurde verfehlt; es folgt HOLD statt einer vierten Revision.
+
+### 11.1 Finale Architekturpräzisierungen
+
+- **H1:** Markierte Adapterpfade verwenden exakt den sichtbaren Text
+  `VLM response interrupted after partial output.`, die Langfuse-Kategorie
+  `partial_stream_non_retryable` und den Loggertext
+  `VLM adapter stopped a non-retryable partial stream.`. Keine variable
+  Sanitizer-Logik; unmarkierte Legacy-Fehler bleiben Kontrollfall.
+- **H2:** 256 Nodes, 512 erreichbare Edges und 256 Aggregate-Kinder. Genau 256
+  Kinder sind zulässig, 257 fail-closed. Getterfehler, malformed Tupel,
+  Nicht-Exception-Kinder und jeder Budgetüberlauf liefern `True`.
+- **H3:** Die identity-safe Wrapper-Graphprüfung läuft vor jeder Selection und
+  State-Mutation. Sichere Zyklen terminieren und dürfen genau einen Providercall;
+  tiefe unsichere, unlesbare, malformed oder mehr als 256 Ziele umfassende
+  Graphen schlagen ohne Selection oder I/O fail-closed fehl.
+
+## 12. Finales Security- und Betriebsgate
+
+Security Revision 3 endet bei **89/100, 0 Critical, 1 High, 1 Medium**. H2–H5
+sind im finalen Review geschlossen; H1, der exakte Konstantenvertrag für
+markierte VikingBot-Fehler, bleibt offen. Das geforderte Gate `0C/0H` und
+mindestens 90/100 ist verfehlt: **Source-Unlock verweigert, HOLD**. Es gibt keine
+weitere Revision zur H1-Schließung in diesem Lauf.
+
+OpenViking MCP Health und ein echter read-only `search_experience`-Aufruf sind
+PASS. Das beweist MCP-Betriebszugriff, nicht Responses-/Compaction-Fähigkeit des
+Providers. Der User hat den Live-Provider-Test vertagt; M1, Aktivierung, Restart
+und Merge bleiben HOLD.

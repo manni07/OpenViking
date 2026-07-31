@@ -25,7 +25,8 @@
     <strong>HOLD:</strong> Der State-Modus, der Compaction-Threshold und der
     globale Hook sind nicht aktiviert. Der Capability-Probe kann einen
     kostenpflichtigen Provider-Request auslösen und darf nur nach ausdrücklicher
-    Genehmigung ausgeführt werden.
+    Genehmigung ausgeführt werden. Der User hat den Live-Test vertagt. Der
+    Legacy-VLM-H3-Source-Unlock ist nach dem finalen Security-Review verweigert.
   </div>
 
   <h2>1. Was der Kandidat bietet</h2>
@@ -123,23 +124,26 @@ vlm.probe_responses_compaction_capability(
       <tr><td>Offline-Kandidat</td><td>Implementiert und getestet</td></tr>
       <tr><td>A/B-Corpus 20 real + 10 synthetisch</td><td>HOLD</td></tr>
       <tr><td>Exakter Endpoint-Probe und Canary</td><td>HOLD</td></tr>
+      <tr><td>OpenViking MCP Health + read-only Suche</td><td>PASS; kein Provider-Capability-Beleg</td></tr>
       <tr><td>Legacy vollständig grün</td><td>HOLD</td></tr>
+      <tr><td>Legacy-VLM-H3 Security</td><td>89/100, 0C/1H/1M; Source-Unlock verweigert</td></tr>
       <tr><td>Aktivierung oder Default-Promotion</td><td>Nicht erfolgt</td></tr>
     </tbody>
   </table>
-  <p>Offline wurden 102/102 neue Tests bestanden. Der Security-Re-Review Revision
-    2 meldet keine offenen Critical-/High-Befunde und hebt das
-    Offline-Kandidaten-Veto auf. Die drei Medium-Risiken wurden offline
-    geschlossen: stabile Credential-Slots auch ohne <code>client_id</code>,
-    cancellation-sicheres Async-Cleanup sowie Directory-FD-, Deadline- und
-    Retention-Härtung des Hooks. Der Review ist vorläufig, weil das geforderte
-    aktuelle Claude Opus nicht verfügbar war und Codex als Ersatzmodell diente;
-    eine unabhängige Revalidierung bleibt vor Aktivierung erforderlich.</p>
+  <p>Offline wurden 102/102 neue Kandidatentests bestanden. Der separate finale
+    Legacy-VLM-H3-Security-Review endet nach drei Revisionen bei 89/100 mit
+    0 Critical, 1 High und 1 Medium. H2 bis H5 sind geschlossen; H1, der exakte
+    Konstantenvertrag für markierte VikingBot-Fehler, bleibt offen. Deshalb ist
+    der Source-Unlock verweigert; es gibt in diesem Lauf keine weitere Revision
+    oder H1-Implementierung. OpenViking MCP Health und ein echter read-only
+    <code>search_experience</code>-Aufruf sind PASS, belegen aber keine
+    Provider-Capability. Der Live-Test bleibt auf Wunsch des Users vertagt.</p>
 
   <h2>10. Weiterführende Dokumente</h2>
   <ul>
     <li><a href="../dossiers/2026-07-31-codex-compaction-openviking-responses-id.md">Implementation Dossier</a></li>
     <li><a href="../tests/2026-07-31-codex-compaction-openviking-responses-td.md">Test Dossier</a></li>
+    <li><a href="../lessons/2026-07-31-codex-compaction-openviking-responses-lessons-learned.md">Lessons Learned</a></li>
     <li><a href="../sessions/2026-07-31-codex-compaction-openviking-responses-open-items.md">Open Items</a></li>
   </ul>
 </body>
