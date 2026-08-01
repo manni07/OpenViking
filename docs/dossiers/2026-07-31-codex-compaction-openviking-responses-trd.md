@@ -2,8 +2,8 @@
 
 ## Codex Responses State und Compaction
 
-Stand: 2026-07-31
-Status: Offline Legacy-VLM HOLD aufgehoben; Live M1 und Promotion auf HOLD
+Stand: 2026-08-01
+Status: Offline-Follow-up PASS; H1/H2 und Promotion auf HOLD
 
 ## 1. Technischer Vertrag
 
@@ -536,3 +536,27 @@ Läufe nutzten `/Volumes/ExtremePro/projects/OpenViking/.venv/bin/python` mit
 `pytest -q -o addopts=`. Worker und Supervisor reproduzierten den finalen
 Breitscope mit 364 PASS plus exakt acht vorbestehenden VolcEngine-
 Konstruktorfehlern. **Offline Legacy-VLM HOLD aufgehoben; Live M1 bleibt HOLD.**
+
+## 15. Technischer Follow-up-Abschluss — 2026-08-01
+
+Das aktuelle Inventar ersetzt die verwaisten VolcEngine-Cachetests durch drei
+Factory-/Sync-/Async-Vertragstests gegen `chat.completions`. Der gezielte Stand
+war 129 PASS, der breite Stand vor spaeteren Follow-up-Aenderungen 348 PASS.
+Der Streamtest wurde in ein nicht sammelbares Supportmodul geteilt und blieb mit
+50/50 sowie der 274er VLM-Matrix gruen. `WatchTask` bestand 7/7 und die 274er
+Matrix unter Pydantic Warning-as-error. L1-L3 sind durch vorhandene
+Sentinel-Senken, 16 Fail-fast-Faelle, Rueckgabewerttreue aller Marker-Aufrufer,
+Cleanup und Built-in-Post-Event-Cancellation geschlossen.
+
+Die Legacy-Isolation bestand Resource 37/37, Service-Fixtures ohne Setupfehler,
+Recovery/Scheduler 19/19, Connector 50/50, Watch 21/21 und Feishu/Queue 23/23.
+Der Deferred-Testdouble liefert nur fuer `defer_post_processing=True` den
+vorbereiteten Payload; kein `wait=True` und keine Abschwaechung des produktiven
+Missing-Payload-Guards wurden eingefuehrt.
+
+Finale konsolidierte Evidenz: 102/102 State/Hook, 500/500 in 18 Dateien unter
+Pydantic Warning-as-error und 150/150 Watch nach Ruff-Format; Ruff check,
+Ruff format und diff-check PASS. H1 bleibt ohne freigegebene Modell-, Limit-,
+Hash-, Preis- und Credential-Policies vor I/O gesperrt; H2 bleibt davon und von
+der Datenfreigabe abhaengig. `agy` ist wegen Headless-Berechtigung UNAVAILABLE,
+nicht PASS.

@@ -2,8 +2,8 @@
 
 ## Codex-Compaction und Responses State
 
-Stand: 2026-07-31
-Status: Offline Legacy-VLM HOLD aufgehoben; 272/272 grün; Live M1 bleibt HOLD
+Stand: 2026-08-01
+Status: Offline-Follow-up PASS; 500/500 konsolidiert und 150/150 Watch; H1/H2 HOLD
 
 ## 1. Testabsicht
 
@@ -899,3 +899,74 @@ reproduzierten den finalen 13-Dateien-Scope mit 364 PASS plus exakt acht
 vorbestehenden VolcEngine-Konstruktorfehlern. Keine Breitsuite wird als
 vollständig grün und keine numerische Coverage oder Mutation-Coverage
 behauptet. **Offline Legacy-VLM HOLD aufgehoben; Live M1 bleibt HOLD.**
+
+## 16. Aktuelles Testinventar und finales Follow-up-Gate — 2026-08-01
+
+Die historische 216er-/364-plus-8-Matrix bleibt Entstehungsevidenz, ist aber
+kein aktueller Reproduktionsvertrag. `tests/models/vlm/test_volcengine_cache.py`
+ist entfernt; aktuell ist
+`tests/models/vlm/test_volcengine_chat_completions.py` mit drei
+Factory-/Sync-/Async-Chat-Completions-Vertragstests.
+
+| Paket | Verifizierter Stand |
+|---|---:|
+| State + Hook | 102/102 PASS |
+| VolcEngine gezielt | 129 PASS |
+| breite VLM-Matrix vor spaeteren Follow-up-Aenderungen | 348 PASS |
+| Streamdatei / VLM-Matrix | 50/50 / 274/274 PASS |
+| WatchTask unter Pydantic Warning-as-error | 7/7 PASS |
+| Resource-Fixtures / Service-Fixtures | 37/37 PASS / 0 Setupfehler |
+| Recovery/Scheduler / Connector | 19/19 / 50/50 PASS |
+| Watch-Service / Feishu-Queue | 21/21 / 23/23 PASS |
+| konsolidierte 18-Dateien-Matrix, Pydantic Warning-as-error | 500/500 PASS |
+| finale Watch-Matrix nach Ruff-Format | 150/150 PASS |
+| Ruff check / Ruff format / diff-check | PASS |
+
+Die Deferred-Matrix prueft `defer_post_processing=True`, genau einen Enqueue,
+`QueueManager.ADD_RESOURCE` und den Prepared-Payload. Sie verwendet kein
+`wait=True`; fehlender Payload bleibt produktiv fail-loud. L1-L3 pruefen
+begrenzte redigierte Senken, Marker-Rueckgabewert und Cleanup sowie die
+Built-in-Cancellation nach dem ersten Event.
+
+H1 hat noch keinen ausfuehrbaren Live-Test: Modell, numerische Limits,
+Fixture-/Tree-Hashes, Preisbasis und Credential-Policies sind nicht genehmigt.
+H2 bleibt bis H1 PASS und Datenfreigabe gesperrt. Kein Skip/Xfail, Offline-Test
+oder MCP-Read ersetzt diese Gates. Der `agy`-Review war wegen
+Headless-Command-Berechtigung UNAVAILABLE und wird nicht als PASS gezaehlt.
+
+Die beiden finalen Follow-up-Matrizen sind exakt so reproduzierbar:
+
+```bash
+PYTHONPATH=.:bot:/tmp/openviking-codex-responses-test-deps-20260731 \
+  /Volumes/ExtremePro/projects/OpenViking/.venv/bin/python -m pytest \
+  -W error::pydantic.warnings.PydanticDeprecatedSince20 \
+  -q -o addopts= -p no:cacheprovider --no-cov \
+  tests/unit/test_codex_vlm.py \
+  tests/unit/test_kimi_glm_vlm.py \
+  tests/unit/test_stream_config_vlm.py \
+  tests/unit/test_extra_headers_vlm.py \
+  tests/unit/test_litellm_vlm_gemini_cache.py \
+  tests/unit/test_model_retry.py \
+  tests/unit/test_vlm_failover.py \
+  tests/unit/test_vlm_reasoning_models.py \
+  tests/unit/test_vlm_response_formats.py \
+  tests/unit/test_vlm_thinking_param.py \
+  tests/models/vlm/test_timeout_config.py \
+  tests/models/vlm/test_volcengine_chat_completions.py \
+  tests/resource/test_watch_manager.py \
+  tests/resource/test_watch_scheduler.py \
+  tests/service/test_watch_recovery.py \
+  tests/service/test_resource_service_watch.py \
+  tests/parse/test_feishu_parser_api.py \
+  tests/service/test_resource_service_connector.py
+
+PYTHONPATH=.:bot:/tmp/openviking-codex-responses-test-deps-20260731 \
+  /Volumes/ExtremePro/projects/OpenViking/.venv/bin/python -m pytest \
+  -q -o addopts= -p no:cacheprovider --no-cov \
+  tests/resource/test_watch_manager.py \
+  tests/resource/test_watch_scheduler.py \
+  tests/service/test_watch_recovery.py \
+  tests/service/test_resource_service_watch.py \
+  tests/parse/test_feishu_parser_api.py \
+  tests/service/test_resource_service_connector.py
+```

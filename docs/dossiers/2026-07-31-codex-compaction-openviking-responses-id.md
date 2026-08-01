@@ -2,9 +2,10 @@
 
 ## Codex-Compaction und OpenViking Responses State
 
-Stand: 2026-07-31
-Status: Offline Legacy-VLM HOLD aufgehoben; Live M1 bleibt HOLD
-Basis-Commit: `60ef45d4c3a7d07ceb1df4e9d7dde7a14449ac50`
+Stand: 2026-08-01
+Status: Offline-Follow-up PASS; H1/H2 bleiben HOLD
+Urspruenglicher Basis-Commit: `60ef45d4c3a7d07ceb1df4e9d7dde7a14449ac50`
+Aktuelle Fork-Basis: `c4e3cc52272c086843f3dc64808ed1e8956abede`
 
 ## 1. Lieferergebnis
 
@@ -586,3 +587,26 @@ acht vorbestehenden VolcEngine-Konstruktorfehlern reproduziert. Keine Breitsuite
 wird als vollständig grün bezeichnet; keine numerische Coverage oder
 Mutation-Coverage wird behauptet. **Offline Legacy-VLM HOLD aufgehoben; Live M1
 bleibt HOLD.**
+
+## 14. Implementierungsnachtrag: Open-Items-Follow-up — 2026-08-01
+
+Auf Branch `agent-workflow/20260801-open-items-follow-up` im Worktree
+`/Volumes/ExtremePro/projects/OpenViking-agent-worktrees/20260801-open-items-follow-up`
+wurden die offline autorisierten H3-, M2-, M3-, L1-L3- und Watch-Testpakete
+chirurgisch umgesetzt. `test_volcengine_cache.py` ist durch drei aktuelle
+Chat-Completions-Vertragstests ersetzt; Streamfakes liegen in
+`tests/unit/_streaming_support.py`; `WatchTask` nutzt den Pydantic-v2-Vertrag;
+die Watch-Tests besitzen lokale Fixtures, Config-Isolation und einen
+Deferred-konformen Mock. Der produktive Deferred-Guard und die VLM-
+Providerkonstruktoren blieben unveraendert.
+
+Die finale Verifikation bestand mit 102/102 State/Hook, 500/500 in der
+konsolidierten 18-Dateien-Matrix unter Pydantic Warning-as-error und 150/150 in
+der finalen Watch-Matrix. Ruff check/format und diff-check sind PASS. Der
+historische Aggregate-Befund heisst `SEC-M2`; M2 bezeichnet ausschliesslich den
+Pydantic-Punkt. Fork-PR #2 ist in `origin/main` gemergt, Upstream-PR #3667 ist
+geschlossen. In Task 8 erfolgten keine Source-/Testaenderungen, Calls, Commits,
+Pushes, Restarts oder Aktivierungen.
+
+H1 und H2 bleiben fail-closed HOLD. Der `agy`-Review ist wegen fehlender
+Headless-Command-Berechtigung UNAVAILABLE und kein PASS.

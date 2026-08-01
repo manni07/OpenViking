@@ -62,6 +62,22 @@ async def mock_viking_fs(temp_storage: Path) -> MockVikingFS:
     return MockVikingFS(root_path=str(temp_storage))
 
 
+@pytest_asyncio.fixture
+async def watch_manager(mock_viking_fs: MockVikingFS) -> AsyncGenerator[WatchManager, None]:
+    """Create WatchManager instance with mock VikingFS."""
+    manager = WatchManager(viking_fs=mock_viking_fs)
+    await manager.initialize()
+    yield manager
+
+
+@pytest_asyncio.fixture
+async def watch_manager_no_fs() -> AsyncGenerator[WatchManager, None]:
+    """Create WatchManager instance without VikingFS."""
+    manager = WatchManager(viking_fs=None)
+    await manager.initialize()
+    yield manager
+
+
 class TestWatchTask:
     """Tests for WatchTask data model."""
 
@@ -133,6 +149,21 @@ class TestWatchTask:
         assert data["created_at"] == now.isoformat()
         assert data["is_active"] is True
         assert "auth_state" not in data
+
+    def test_unknown_fields_are_ignored_and_datetime_json_remains_iso8601(self):
+        """Persisted task input may carry stale fields without changing JSON timestamps."""
+        created_at = datetime(2026, 8, 1, 12, 30, 45)
+
+        task = WatchTask(
+            path="/test/path",
+            created_at=created_at,
+            removed_legacy_field="ignored",
+        )
+
+        assert task.model_extra is None
+        assert "removed_legacy_field" not in task.model_dump()
+        assert json.loads(task.model_dump_json())["created_at"] == created_at.isoformat()
+        assert task.to_dict()["created_at"] == created_at.isoformat()
 
     def test_from_dict(self):
         """Test creating task from dictionary."""
@@ -275,12 +306,8 @@ class TestWatchManager:
     async def test_uri_index_move_and_deactivate_are_account_scoped(self):
         manager = WatchManager()
         uri = "viking://resources/shared"
-        task_a = await manager.create_task(
-            path="/a", account_id="account-a", to_uri=uri
-        )
-        task_b = await manager.create_task(
-            path="/b", account_id="account-b", to_uri=uri
-        )
+        task_a = await manager.create_task(path="/a", account_id="account-a", to_uri=uri)
+        task_b = await manager.create_task(path="/b", account_id="account-b", to_uri=uri)
         with pytest.raises(ConflictError):
             await manager.create_task(path="/duplicate", account_id="account-a", to_uri=uri)
 
@@ -297,9 +324,7 @@ class TestWatchManager:
         assert task_b.to_uri == uri
         assert task_b.is_active is False
         assert deactivated == [task_b]
-        moved = await manager.get_task_by_uri(
-            f"{uri}-moved", "account-a", "default", "root"
-        )
+        moved = await manager.get_task_by_uri(f"{uri}-moved", "account-a", "default", "root")
         assert moved is task_a
         assert await manager.get_task_by_uri(uri, "account-b", "default", "root") is task_b
 

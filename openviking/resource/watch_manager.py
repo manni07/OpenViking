@@ -13,7 +13,7 @@ import uuid
 from datetime import datetime, timedelta
 from typing import Any, Awaitable, Callable, Dict, List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from openviking.resource.watch_storage import (
     WATCH_TASK_STORAGE_BAK_URI,
@@ -81,9 +81,7 @@ class WatchTask(BaseModel):
     user_id: str = Field(default="default", description="User ID who created this task")
     original_role: str = Field(default="user", description="Role used to execute this task")
 
-    class Config:
-        json_encoders = {datetime: lambda v: v.isoformat() if v else None}
-        extra = "ignore"
+    model_config = ConfigDict(extra="ignore")
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert task to public dictionary."""

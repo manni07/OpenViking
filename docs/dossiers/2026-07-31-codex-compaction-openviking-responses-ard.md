@@ -2,9 +2,10 @@
 
 ## Codex-Compaction und OpenViking Responses State
 
-Stand: 2026-07-31
-Status: Offline Legacy-VLM HOLD aufgehoben; Live M1, Aktivierung und Promotion auf HOLD
-Basis: `60ef45d4c3a7d07ceb1df4e9d7dde7a14449ac50`
+Stand: 2026-08-01
+Status: Offline-Follow-up PASS; H1/H2, Aktivierung und Promotion auf HOLD
+Urspruengliche Basis: `60ef45d4c3a7d07ceb1df4e9d7dde7a14449ac50`
+Aktuelle Fork-Basis: `c4e3cc52272c086843f3dc64808ed1e8956abede`
 
 ## 1. Ergebnis
 
@@ -388,3 +389,23 @@ Testsimulation: 98 Prozent, Minimum 96. Security Rev2: 96/100, 0C/0H/1M, PASS;
 Damit ist ausschließlich der **Offline Legacy-VLM HOLD aufgehoben**. **Live M1
 bleibt HOLD**; kein Live-Test, keine Aktivierung, Promotion, kein Merge oder
 Restart erfolgte.
+
+## 14. Architekturabschluss des Open-Items-Follow-ups — 2026-08-01
+
+Der Fork-Merge `manni07/OpenViking#2` ist als `c4e3cc52272c086843f3dc64808ed1e8956abede`
+die aktuelle Basis. Der falsche Upstream-PR #3667 ist geschlossen. H3, M2, M3
+und L1-L3 sind offline mit dem aktuellen Provider-, Pydantic-, Stream- und
+Watch-Vertrag geschlossen; der historische Aggregate-Befund wird zur
+Eindeutigkeit `SEC-M2` genannt.
+
+Architektonisch offen bleiben nur H1 und H2. H1 darf keinen Credential-, Client-
+oder Netzwerkpfad erreichen, bevor Modell, numerische Limits, Fixture-/Tree-
+Hashes, Preisbasis und Credential-Lifecycle-Policies genehmigt und vollstaendig
+schema-validiert sind. H2 setzt H1 PASS und eine separate Datenfreigabe voraus.
+Die finale Offline-Evidenz umfasst 102/102 State/Hook, 500/500 in der
+18-Dateien-Matrix unter Pydantic Warning-as-error und 150/150 Watch-Faelle;
+Ruff check/format und diff-check sind PASS. Daraus folgt keine Live-, Canary-,
+Aktivierungs- oder Promotionsfreigabe.
+
+Der `agy`-Review war wegen Headless-Command-Berechtigung nicht verfuegbar und
+ist als UNAVAILABLE, nicht als PASS, klassifiziert.

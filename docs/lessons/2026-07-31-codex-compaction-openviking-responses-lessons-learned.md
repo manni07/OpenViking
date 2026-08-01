@@ -3,7 +3,7 @@
 ## Codex-Compaction, Responses State und Legacy-VLM-H3
 
 Stand: 2026-07-31
-Status: Abschlussreflexion; Security-, Live- und Promotions-HOLD bleiben bestehen
+Status: Offline-Follow-up PASS; H1/H2, Live und Promotion bleiben HOLD
 
 ## 1. Evidenzgrenzen früh einfrieren
 
@@ -93,3 +93,20 @@ klassenmarkierten Fallback mit Originalexception als `__cause__`, und jeder
 Aufrufer muss das zurückgegebene Objekt behalten. Bei Aggregate-Grenzen reicht
 ein vertrauensvolles `len()` nicht; die Schranke muss in jeder Iteration erneut
 erzwungen werden.
+
+## 13. Historische Baseline und aktuelles Inventar muessen getrennt bleiben
+
+Die alte breite Evidenz `364 PASS + 8 FAIL` war korrekt fuer ihren Zeitpunkt,
+aber die acht Faelle gehoerten zu einem verwaisten Testvertrag. Nach dessen
+Ersatz durch drei aktuelle Chat-Completions-Tests ist sie kein aktueller
+Restfehlerbestand. Ein restartbares Dossier muss deshalb historische
+Ausgangsevidenz bewahren und zugleich ein eindeutig datiertes aktuelles
+Testinventar benennen. Dasselbe gilt fuer Befundkennungen: `SEC-M2` verhindert,
+dass der geschlossene Aggregate-Befund mit dem spaeteren Pydantic-M2 vermischt
+wird.
+
+Offline-Vollgruen bleibt trotzdem keine Live-Freigabe. Die finalen 102/102,
+500/500 und 150/150 belegen den lokalen Scope; ohne freigegebene Modell-, Limit-,
+Hash-, Preis- und Credential-Policies bleibt H1 vor I/O gesperrt und H2 darf
+nicht beginnen. Ein wegen Headless-Berechtigung nicht verfuegbarer `agy`-Review
+ist UNAVAILABLE und darf nicht zu PASS umgedeutet werden.
