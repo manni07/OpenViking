@@ -10,50 +10,15 @@ import pytest
 
 import openviking.utils.model_retry as model_retry
 from openviking.models.vlm.backends.openai_vlm import OpenAIVLM
-
-
-class MockDelta:
-    """Mock delta object for streaming chunks."""
-
-    def __init__(self, content=None):
-        self.content = content
-
-
-class MockChoice:
-    """Mock choice object for streaming chunks."""
-
-    def __init__(self, delta=None):
-        self.delta = delta
-
-
-class MockChunk:
-    """Mock chunk object for streaming response."""
-
-    def __init__(self, content=None, usage=None):
-        self.choices = [MockChoice(delta=MockDelta(content=content))] if content is not None else []
-        self.usage = usage
-
-
-class MockUsage:
-    """Mock usage object."""
-
-    def __init__(self, prompt_tokens=0, completion_tokens=0):
-        self.prompt_tokens = prompt_tokens
-        self.completion_tokens = completion_tokens
-
-
-class DetailedMockUsage(MockUsage):
-    def __init__(
-        self,
-        prompt_tokens=0,
-        completion_tokens=0,
-        cached_tokens=0,
-        reasoning_tokens=0,
-    ):
-        super().__init__(prompt_tokens, completion_tokens)
-        self.total_tokens = prompt_tokens + completion_tokens
-        self.prompt_tokens_details = SimpleNamespace(cached_tokens=cached_tokens)
-        self.completion_tokens_details = SimpleNamespace(reasoning_tokens=reasoning_tokens)
+from tests.unit._streaming_support import (
+    AcloseOnlyStream,
+    DetailedMockUsage,
+    MockChunk,
+    MockUsage,
+    NonAwaitableCloseStream,
+    ScriptedAsyncStream,
+    ScriptedSyncStream,
+)
 
 
 class TestVLMStreamConfig:
@@ -498,91 +463,6 @@ class TestStreamingResponseProcessing:
             )
 
 
-class ScriptedSyncStream:
-    def __init__(self, events, close_error=None):
-        self._events = iter(events)
-        self.close_error = close_error
-        self.close_count = 0
-
-    def __iter__(self):
-        return self
-
-    def __next__(self):
-        item = next(self._events)
-        if isinstance(item, BaseException):
-            raise item
-        return item
-
-    def close(self):
-        self.close_count += 1
-        if self.close_error is not None:
-            raise self.close_error
-
-
-class ScriptedAsyncStream:
-    def __init__(self, events, close_error=None, close_started=None, close_release=None):
-        self._events = iter(events)
-        self.close_error = close_error
-        self.close_started = close_started
-        self.close_release = close_release
-        self.close_count = 0
-        self.cleanup_finished = False
-
-    def __aiter__(self):
-        return self
-
-    async def __anext__(self):
-        try:
-            item = next(self._events)
-        except StopIteration as exc:
-            raise StopAsyncIteration from exc
-        if isinstance(item, BaseException):
-            raise item
-        return item
-
-    async def close(self):
-        self.close_count += 1
-        if self.close_started is not None:
-            self.close_started.set()
-        if self.close_release is not None:
-            await self.close_release.wait()
-        self.cleanup_finished = True
-        if self.close_error is not None:
-            raise self.close_error
-
-
-class NonAwaitableCloseStream(ScriptedAsyncStream):
-    def __init__(self, events):
-        super().__init__(events)
-        self.aclose_count = 0
-
-    def close(self):
-        self.close_count += 1
-        self.cleanup_finished = True
-
-    async def aclose(self):
-        self.aclose_count += 1
-
-
-class AcloseOnlyStream:
-    def __init__(self, events):
-        self._events = iter(events)
-        self.aclose_count = 0
-
-    def __aiter__(self):
-        return self
-
-    async def __anext__(self):
-        try:
-            item = next(self._events)
-        except StopIteration as exc:
-            raise StopAsyncIteration from exc
-        return item
-
-    async def aclose(self):
-        self.aclose_count += 1
-
-
 def _is_marked(error):
     check = getattr(model_retry, "is_vlm_error_non_retryable", None)
     assert callable(check), "model_retry must define is_vlm_error_non_retryable"
@@ -810,6 +690,50 @@ class TestStreamingReducerContract:
         assert raised.value is cleanup
         assert _is_marked(cleanup) is True
         assert stream.close_count == 1
+
+    @pytest.mark.asyncio
+    async def test_unmarkable_async_cleanup_error_raises_marker_return_value(self):
+        class MarkerAssignmentRejectingCleanupError(RuntimeError):
+            def __setattr__(self, name, value):
+                if name == "_openviking_vlm_non_retryable":
+                    raise RuntimeError("instance marker assignment denied")
+                super().__setattr__(name, value)
+
+        vlm = OpenAIVLM({"api_key": "sk-test"})
+        original = MarkerAssignmentRejectingCleanupError("SENTINEL-CLEANUP-MARKER")
+        stream = ScriptedAsyncStream([MockChunk(content="partial")], close_error=original)
+
+        with pytest.raises(BaseException) as raised:
+            await vlm._process_streaming_response_async(stream)
+
+        assert stream.close_count == 1
+        assert raised.value is not original
+        assert raised.value.__cause__ is original
+        assert _is_marked(raised.value) is True
+
+    @pytest.mark.asyncio
+    async def test_async_cancellation_after_event_preserves_identity_and_cleans_up_once(self):
+        vlm = OpenAIVLM({"api_key": "sk-test"})
+        cancellation = asyncio.CancelledError("post-event cancellation")
+        stream = ScriptedAsyncStream([MockChunk(content="partial"), cancellation])
+        original_create_task = asyncio.create_task
+        cleanup_tasks = []
+
+        def capture_cleanup_task(coro):
+            task = original_create_task(coro)
+            cleanup_tasks.append(task)
+            return task
+
+        with patch.object(asyncio, "create_task", capture_cleanup_task):
+            subject = original_create_task(vlm._process_streaming_response_async(stream))
+            with pytest.raises(asyncio.CancelledError) as raised:
+                await subject
+
+        assert raised.value is cancellation
+        assert stream.close_count == 1
+        assert subject.done()
+        assert len(cleanup_tasks) == 1
+        assert cleanup_tasks[0].done()
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("mode", ["sync", "async"])
