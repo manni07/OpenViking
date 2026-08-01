@@ -409,3 +409,18 @@ Aktivierungs- oder Promotionsfreigabe.
 
 Der `agy`-Review war wegen Headless-Command-Berechtigung nicht verfuegbar und
 ist als UNAVAILABLE, nicht als PASS, klassifiziert.
+
+## 15. Root-Test-Ownership-Grenze — 2026-08-01
+
+Die Root-Pytest-Suite und die beiden Live-Harnesses sind getrennte
+Architekturkomponenten. `tests/api_test` und `tests/oc2ov_test` besitzen eigene
+Abhaengigkeiten, Arbeitsverzeichnisse und Workflows und werden deshalb exakt
+ueber `collect_ignore` aus dem Root-Collector ausgeschlossen. Alle anderen
+Root-Testbaeume bleiben sichtbar. Optionale Provider-E2E-Module muessen ohne
+ihr Extra sammelbar sein; die fehlende Laufzeitabhaengigkeit bleibt bei einer
+tatsaechlichen Aktivierung ein lauter Fehler. Eine frische, lockfile-identische
+Root-venv ist Teil des Testvertrags und ersetzt keine Produktcodekorrektur.
+
+Diese Grenze beseitigt die 20 bekannten Collection-Fehler, beweist jedoch
+nicht den Laufzeitstatus der Standalone-Harnesses. H1/H2 bleiben davon
+unabhaengig HOLD.

@@ -560,3 +560,18 @@ Ruff format und diff-check PASS. H1 bleibt ohne freigegebene Modell-, Limit-,
 Hash-, Preis- und Credential-Policies vor I/O gesperrt; H2 bleibt davon und von
 der Datenfreigabe abhaengig. `agy` ist wegen Headless-Berechtigung UNAVAILABLE,
 nicht PASS.
+
+## 16. Root-Collection-Vertrag — 2026-08-01
+
+- Environment: uv 0.8.20, Python 3.12.11,
+  `UV_PROJECT_ENVIRONMENT=.venv-root-collect uv sync --frozen --extra test`.
+- Verpflichtende Imports: `mcp` und `scrapy` muessen in diesem Environment
+  importierbar sein; fehlende Imports sind Environment-FAIL, kein Skip-Grund.
+- Root-Grenze: `collect_ignore` enthaelt exakt `api_test` und `oc2ov_test`.
+- Gemini: kein Import von `gemini_embedders` bei Modul-Collection; Import erst
+  in Fixture bzw. direktem Task-Type-Test; kein `importorskip`.
+- Gate: vollstaendige Root-Collection Exit 0, mindestens ein Root-Node, keine
+  Node-ID aus den beiden Standalone-Harnesses und kein Lockfile-Drift.
+
+Erreichte Evidenz: 6382 Root-Tests gesammelt, null Collection-Fehler. Die
+bekannten Marker- und Hilfsklassen-Warnungen bleiben separat offen.

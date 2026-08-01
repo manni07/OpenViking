@@ -610,3 +610,18 @@ Pushes, Restarts oder Aktivierungen.
 
 H1 und H2 bleiben fail-closed HOLD. Der `agy`-Review ist wegen fehlender
 Headless-Command-Berechtigung UNAVAILABLE und kein PASS.
+
+## 15. Implementierung: Root-Collection-Fix — 2026-08-01
+
+Die Umsetzung aendert ausschliesslich den Root-Pytest-Collector, den
+Gemini-E2E-Test und einen neuen Regressionstest. `tests/conftest.py` ignoriert
+exakt die beiden eigenstaendigen Harness-Wurzeln. Der Gemini-Embedder-Import
+liegt in `embedder()` und im einzelnen Test, der ohne Fixture direkt zwei
+Embedder erstellt. `tests/test_test_suite_boundaries.py` schuetzt die exakte
+Ownership-Grenze, die providerfreie Modul-Collection und den lauten Fehler bei
+aktivierter Nutzung ohne optionales Modul.
+
+RED: 3/3 erwartete Fehler. GREEN: 3/3 PASS. Final: `mcp`/`scrapy` importierbar,
+Gemini-E2E 5 Tests gesammelt, Root 6382 Tests gesammelt, Exit 0. Es gibt keine
+Aenderung an Produktcode, `pyproject.toml`, `uv.lock`, CI, Standalone-Harnesses
+oder Live-Konfiguration.
