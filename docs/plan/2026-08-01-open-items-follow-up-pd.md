@@ -292,3 +292,26 @@ UNAVAILABLE und kein PASS; es gab kein verwertbares Feedback einzuarbeiten.
 Das unabhaengige finale Source-/Testreview ergab PASS ohne Veto: Security
 98/100, Code/API 97/100 und Tests 95/100. Der verifizierte
 Implementierungscommit ist `9a2bcd130e47ef0e9109ba7902e0335c537a690b`.
+
+## 10. Warnungsbereinigung und OpenClaw-Ausführung — 2026-08-01
+
+Der Folgezyklus schließt den zuvor offenen Root-Warnungssatz, ohne die
+Ownership-Grenze zu erweitern:
+
+1. `cli_remote` und `qdrant` sind in der Root-Pytest-Konfiguration registriert.
+2. Drei reine Supporttypen wurden aus dem `Test*`-Namensraum genommen; ihre
+   Testsemantik bleibt unverändert.
+3. Der Standalone-Harness sammelt nur `tests`, nutzt `.`/`utils` als
+   Importpfade und verwendet neutrale `ScenarioData`-Typen.
+
+Die test-first Regressionen sind 2/2 GREEN. Der gefrorene Root-Strict-Lauf
+sammelt 6384 Tests mit Exit 0; die normale Collection zeigt keine
+`Pytest*Warning`. Der isolierte Harness-Lauf sammelt 47 Tests ohne
+Collection-Warning und der gemockte Diagnostik-Satz besteht 4/4.
+
+Der Harness benötigt weiterhin eine aus `settings.example.py` erzeugte,
+ignorierte `config/settings.py`; sie ist keine freigegebene Credentialquelle.
+Die eigentlichen P0-/OpenClaw-Agent-Aufrufe, `run.sh`/`run_tests.py`,
+Servicezugriffe, Provider-Live-Tests, H1 und H2 bleiben HOLD. Kein Restart und
+kein Netzwerk-/Credential-Livepfad wurde ausgeführt. Der `agy`-Review bleibt
+wegen fehlender Headless-`command`-Berechtigung UNAVAILABLE.

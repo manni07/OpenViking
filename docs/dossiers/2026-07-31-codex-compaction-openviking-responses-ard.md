@@ -424,3 +424,23 @@ Root-venv ist Teil des Testvertrags und ersetzt keine Produktcodekorrektur.
 Diese Grenze beseitigt die 20 bekannten Collection-Fehler, beweist jedoch
 nicht den Laufzeitstatus der Standalone-Harnesses. H1/H2 bleiben davon
 unabhaengig HOLD.
+
+## 16. Root-Warnungen und OpenClaw-Ownership — 2026-08-01
+
+Die Root-Collection-Komponente hat einen eigenen, deterministischen
+Warnungsvertrag. `cli_remote` und `qdrant` sind deklarierte Service-Marker;
+Supportmodelle und Accessor-Doubles beginnen nicht mehr mit `Test`, damit
+Pytest sie nicht als Testklassen interpretiert. Der Vertrag ist durch
+`tests/test_collection_warnings.py` test-first geschützt.
+
+`tests/oc2ov_test` bleibt eine eigenständige Harness-Komponente. Ihre
+Pytest-Konfiguration sammelt nur `tests`, ergänzt die beiden lokalen
+Importpfade und verwendet neutrale Szenariodaten-Typen. Eine echte
+`config/settings.py` bleibt aus dem Repository ausgeschlossen; ein Lauf darf
+nur eine temporäre Kopie des Beispiels verwenden. Diese Architektur trennt
+Root-Collection, Offline-Harness-Collection und Live-P0-Verhalten.
+
+Offline-Gate: Root-Strict-Collection 6384/6384 ohne Warning,
+Harness-Collection 47/47 ohne Warning, Mock-Diagnostik 4/4. Live-P0, H1, H2
+und Provider bleiben fail-closed HOLD; kein Service-, Server- oder
+Rechnerneustart ist Bestandteil dieses Designs.

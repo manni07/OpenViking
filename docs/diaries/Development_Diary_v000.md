@@ -233,3 +233,35 @@ unveraendert.
 Warnungen bleiben offen und wurden nicht als behoben gewertet. Die beiden
 Standalone-Harnesses wurden nicht ausgefuehrt und erhalten kein PASS. H1/H2,
 Live-Provider, Credentials, Services und Restarts blieben unberuehrt.
+
+## 2026-08-01 — Root-Warnungen und OpenClaw-Harness offline geschlossen
+
+**Anlass.** Nach dem Merge blieb der dokumentierte Root-Warnungssatz offen:
+elf unbekannte `cli_remote`-Marker, ein `qdrant`-Marker und drei von Pytest
+fehlklassifizierte Supportklassen. Zusätzlich sollte die eigenständige
+OpenClaw-Harness aus ihrem Besitzerverzeichnis geprüft werden, ohne H1/H2,
+Provider-Live-Tests oder Services zu berühren.
+
+**TDD/Umsetzung.** Ein neues `tests/test_collection_warnings.py` wurde zuerst
+gegen die unveränderte Merge-Basis ausgeführt und scheiterte erwartungsgemäß
+an 12 Strict-Marker-Fehlern und drei Collection-Warnungen. Danach wurden die
+beiden Marker registriert und `JsonStabilityModel`, `JsonUtilsModel` sowie
+`RegistryAccessor` eingeführt. Die Harness erhielt `testpaths = ["tests"]`
+und `pythonpath = [".", "utils"]`; `TestData`/`TestDataManager` wurden zu
+`ScenarioData`/`ScenarioDataManager`, ohne die Live-Tests zu aktivieren.
+
+**Verifikation.** Die frische uv-Umgebung (uv 0.8.20, Python 3.12.11,
+`mcp`/`scrapy` aus dem Lockfile) sammelte 6384 Root-Tests unter
+`--strict-markers` mit Exit 0. Die beiden neuen Regressionen bestanden 2/2;
+die isolierten Supporttestdateien bestanden 43/43 mit `--noconftest`. Die
+OpenClaw-Harness sammelte nach temporärer, aus dem Beispiel erzeugter
+`config/settings.py` 47 Tests ohne `PytestCollectionWarning`; der gemockte
+Diagnostik-Satz bestand 4/4. Die temporäre Datei wurde entfernt.
+
+**Grenzen.** Ein breiterer Root-Testlauf löst die bestehende allgemeine
+Fixtureannahme `/Users/turgay/.openviking/ov.conf` mit nicht beschreibbarem
+`/app`-Workspace aus; das ist ein separater Laufzeit-/Konfigurationsblocker,
+kein Collection-Fehler. P0/OpenClaw-Agent-Aufrufe, `run.sh`, `run_tests.py`,
+H1/H2, Provider-Live-Tests, Credentials und alle Neustarts blieben HOLD bzw.
+unangetastet. `agy` war nach korrekter CLI-Prüfung wegen fehlender Headless-
+`command`-Berechtigung UNAVAILABLE.

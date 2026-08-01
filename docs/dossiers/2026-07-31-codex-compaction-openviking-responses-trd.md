@@ -575,3 +575,25 @@ nicht PASS.
 
 Erreichte Evidenz: 6382 Root-Tests gesammelt, null Collection-Fehler. Die
 bekannten Marker- und Hilfsklassen-Warnungen bleiben separat offen.
+
+## 17. Warnungs-Gate und Harness-Contract — 2026-08-01
+
+### Root
+
+| Gate | Befehl/Vertrag | Ergebnis |
+|---|---|---|
+| Marker | Root-Collection mit `--strict-markers` | 6384 gesammelt, Exit 0 |
+| Supportklassen | `-W error::pytest.PytestCollectionWarning` auf den zwei Dateien | PASS; keine Collection-Warnung |
+| Regression | `tests/test_collection_warnings.py` | 2/2 PASS |
+
+### OpenClaw, offline
+
+Die Harness-Konfiguration setzt `testpaths = ["tests"]` und
+`pythonpath = [".", "utils"]`. Mit einer temporär aus dem Beispiel erzeugten
+Konfiguration sammelt die isolierte eigene venv 47 Tests mit
+`-W error::pytest.PytestCollectionWarning`; der gemockte Diagnostiklauf
+besteht 4/4. Die temporäre Konfiguration wird nicht committet.
+
+Damit sind die 15 vorbestehenden Root-Warnungen geschlossen. Ein grüner
+Collection-Lauf ist kein Live-Gate: P0/OpenClaw-Agent-Aufrufe,
+`run.sh`/`run_tests.py`, H1, H2 und Provider-Live-Tests bleiben HOLD.

@@ -38,3 +38,23 @@ nur korrekt aus dem Root-Scope entfernt, nicht ausgefuehrt. Die vollstaendige
 Root-Testausfuehrung und alle Live-Provider-Phasen bleiben ohne neue
 Autorisierung offen. Kein Rechner-, Server-, Runtime-, Container-, Service-
 oder Prozess-Restart ist durch diesen Bericht erlaubt.
+
+## Nachlauf: Offline-Warnungen und OpenClaw-Harness — 2026-08-01
+
+Die Massnahmen M1, M2 und M3 sind mit dem Nachlauf abgeschlossen:
+
+- `cli_remote` und `qdrant` sind in der Root-Pytest-Konfiguration registriert.
+- Die drei Supportklassen sind nicht mehr als Testklassen benannt.
+- Die neue Regression `tests/test_collection_warnings.py` besteht mit 2/2 Tests.
+- Die frische Root-Umgebung sammelt 6384 Tests mit `--strict-markers` und ohne
+  Collection-Warnungen.
+
+H3 ist offline teilweise abgeschlossen: Der eigenständige OpenClaw-/OC2OV-
+Harness sammelt aus seinem eigenen Verzeichnis 47 Tests ohne
+`PytestCollectionWarning`; `tests/test_cli_diagnostics.py` besteht mit 4/4.
+Die temporär aus der Beispielkonfiguration erzeugten Settings wurden nach dem
+Lauf entfernt und nie versioniert. P0-/Live-Tests, der veraltete Harness-
+Runner sowie H1/H2 und Provider-Live-Tests bleiben bewusst HOLD.
+
+Der aktuelle, exakt dreistufige Folgebericht (3 High, 3 Medium, 3 Low) ist
+[`2026-08-01-warnings-openclaw-open-items.md`](2026-08-01-warnings-openclaw-open-items.md).

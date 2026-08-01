@@ -25,7 +25,7 @@
 
   <div class="ok">
     <strong>PASS:</strong> In einer frischen, aus <code>uv.lock</code>
-    erstellten Worktree-Umgebung wurden 6382 Root-Tests in 18.07 Sekunden ohne
+    erstellten Worktree-Umgebung wurden 6384 Root-Tests ohne
     Collection-Fehler gesammelt.
   </div>
 
@@ -52,8 +52,8 @@ UV_PROJECT_ENVIRONMENT=.venv-root-collect \
   -u OPENAI_ACCESS_TOKEN \
   .venv-root-collect/bin/python -m pytest \
   tests --collect-only \
-  -q -o addopts= -p no:cacheprovider --no-cov</code></pre>
-  <p>Erwartung: <code>6382 tests collected</code>, Exitcode 0 und keine
+  -q -o addopts= -p no:cacheprovider --no-cov --strict-markers</code></pre>
+  <p>Erwartung: <code>6384 tests collected</code>, Exitcode 0 und keine
     Collection-Fehler. Eine andere Zahl ist als Inventardrift zu untersuchen.</p>
 
   <h2>4. Was die Root-Collection absichtlich nicht besitzt</h2>
@@ -68,13 +68,28 @@ UV_PROJECT_ENVIRONMENT=.venv-root-collect \
     eine neue ausdrueckliche Freigabe erforderlich.
   </div>
 
-  <h2>5. Bekannte Warnungen</h2>
-  <p>Der Lauf meldet 11 unbekannte <code>cli_remote</code>-Marker, einen
-    unbekannten <code>qdrant</code>-Marker und drei Helper-Class-
-    Collection-Warnungen. Sie verhindern die Collection nicht, bleiben aber
-    offen und duerfen nicht verschwiegen werden.</p>
+  <h2>5. Warnungs-Gate (aktualisiert)</h2>
+  <p>Die zuvor offenen 11 <code>cli_remote</code>-, eine
+    <code>qdrant</code>- und drei Helper-Class-Warnungen sind geschlossen.
+    Die Marker sind registriert; die drei Supporttypen beginnen nicht mehr mit
+    <code>Test</code>. Strict- und normale Collection melden keine
+    <code>Pytest*Warning</code>.</p>
 
-  <h2>6. Weiterfuehrende Dokumente</h2>
+  <h2>6. OpenClaw-Harness separat offline</h2>
+  <pre><code>cd tests/oc2ov_test
+cp config/settings.example.py config/settings.py  # nur temporär, ignoriert
+.venv-oc2ov/bin/python -m pytest --collect-only -q \
+  -o addopts= -p no:cacheprovider \
+  -W error::pytest.PytestCollectionWarning
+.venv-oc2ov/bin/python -m pytest tests/test_cli_diagnostics.py -q \
+  -o addopts= -p no:cacheprovider
+unlink config/settings.py</code></pre>
+  <p>Der Offline-Lauf sammelt 47 Tests ohne Collection-Warnung; die gemockte
+    Diagnostik besteht 4/4. P0/OpenClaw-Agent-Aufrufe und alle Live-Gates
+    bleiben HOLD. <code>config/settings.py</code> darf keine Credentials aus
+    dem Repository beziehen.</p>
+
+  <h2>7. Weiterfuehrende Dokumente</h2>
   <ul>
     <li><a href="../tests/2026-08-01-root-collection-fix-td.md">Test Dossier</a></li>
     <li><a href="../sessions/2026-08-01-root-collection-fix-stp.md">Session Transfer Protocol</a></li>
