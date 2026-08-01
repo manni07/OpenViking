@@ -13,6 +13,7 @@ from openviking.resource.watch_manager import WatchManager
 from openviking.server.identity import RequestContext, Role
 from openviking.service import resource_service as resource_service_module
 from openviking.service.resource_service import ResourceService
+from openviking.storage.queuefs import QueueManager
 from openviking_cli.exceptions import ConflictError, InvalidArgumentError
 from openviking_cli.session.user_id import UserIdentifier
 
@@ -34,7 +35,20 @@ class MockResourceProcessor:
 
     async def process_resource(self, **kwargs):
         self.calls.append(kwargs)
-        return {"root_uri": kwargs.get("to") or "viking://resources/test"}
+        root_uri = kwargs.get("to") or "viking://resources/test"
+        result = {"root_uri": root_uri}
+        if kwargs.get("defer_post_processing"):
+            result.update(
+                {
+                    "_post_process": {"root_uri": root_uri},
+                    "_resource_lock": SimpleNamespace(
+                        active=False,
+                        to_handoff=MagicMock(return_value=None),
+                        close=AsyncMock(),
+                    ),
+                }
+            )
+        return result
 
 
 class MockSkillProcessor:
@@ -91,6 +105,30 @@ def isolate_service_dependencies(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(resource_service_module, "is_git_repo_url", lambda _path: False)
 
 
+@pytest.fixture
+def _empty_code_hosting_config(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep non-code-host URL watches independent from global config I/O."""
+    monkeypatch.setattr(
+        "openviking.utils.code_hosting_utils.get_openviking_config",
+        lambda: SimpleNamespace(
+            code=SimpleNamespace(
+                github_domains=[],
+                gitlab_domains=[],
+                azure_devops_domains=[],
+                code_hosting_domains=[],
+            )
+        ),
+    )
+
+
+@pytest_asyncio.fixture
+async def watch_manager() -> AsyncGenerator[WatchManager, None]:
+    """Create WatchManager instance without VikingFS for testing."""
+    manager = WatchManager(viking_fs=None)
+    await manager.initialize()
+    yield manager
+
+
 @pytest_asyncio.fixture
 async def resource_service(watch_manager: WatchManager) -> AsyncGenerator[ResourceService, None]:
     """Create ResourceService instance with watch support."""
@@ -103,6 +141,7 @@ async def resource_service(watch_manager: WatchManager) -> AsyncGenerator[Resour
         skill_processor=MockSkillProcessor(),
         watch_scheduler=scheduler,
     )
+    service._enqueue_add_resource_job = AsyncMock(return_value=SimpleNamespace(task_id="test-task"))
     yield service
 
 
@@ -192,7 +231,7 @@ class TestWatchTaskCreation:
     ):
         to_uri = "viking://resources/align_processor_params"
 
-        await resource_service.add_resource(
+        result = await resource_service.add_resource(
             path="/test/path",
             ctx=request_context,
             to=to_uri,
@@ -207,6 +246,14 @@ class TestWatchTaskCreation:
         assert task.build_index is False
         assert task.summarize is True
         assert task.processor_kwargs.get("custom_option") == "x"
+        assert result["task_id"] == "test-task"
+        assert resource_service._resource_processor.calls[-1]["defer_post_processing"] is True
+        resource_service._enqueue_add_resource_job.assert_awaited_once()
+        enqueue_call = resource_service._enqueue_add_resource_job.await_args
+        assert enqueue_call.kwargs["queue_name"] == QueueManager.ADD_RESOURCE
+        assert enqueue_call.args[0].prepared == {"root_uri": to_uri}
+        assert enqueue_call.args[0].build_index is False
+        assert enqueue_call.args[0].summarize is True
 
     @pytest.mark.asyncio
     async def test_create_watch_task_with_default_interval(
@@ -288,6 +335,7 @@ class TestAddResourceArgs:
         monkeypatch: pytest.MonkeyPatch,
         resource_service: ResourceService,
         request_context: RequestContext,
+        _empty_code_hosting_config: None,
     ):
         monkeypatch.setattr(
             resource_service_module,
@@ -659,6 +707,9 @@ class TestResourceProcessingIndependence:
             skill_processor=MockSkillProcessor(),
             watch_scheduler=scheduler,
         )
+        service._enqueue_add_resource_job = AsyncMock(
+            return_value=SimpleNamespace(task_id="test-task")
+        )
 
         result = await service.add_resource(
             path="/test/path",
@@ -679,6 +730,9 @@ class TestResourceProcessingIndependence:
             resource_processor=MockResourceProcessor(),
             skill_processor=MockSkillProcessor(),
             watch_scheduler=None,
+        )
+        service._enqueue_add_resource_job = AsyncMock(
+            return_value=SimpleNamespace(task_id="test-task")
         )
 
         result = await service.add_resource(
