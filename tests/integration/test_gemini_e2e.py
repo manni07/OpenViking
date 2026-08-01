@@ -8,7 +8,6 @@ Run: pytest tests/integration/test_gemini_e2e.py -v -m integration
 
 import pytest
 
-from openviking.models.embedder.gemini_embedders import GeminiDenseEmbedder
 from tests.integration.conftest import GOOGLE_API_KEY, l2_norm, requires_api_key
 
 pytestmark = [pytest.mark.integration, requires_api_key]
@@ -23,6 +22,8 @@ def _cosine_similarity(a: list, b: list) -> float:
 
 @pytest.fixture(scope="module")
 def embedder():
+    from openviking.models.embedder.gemini_embedders import GeminiDenseEmbedder
+
     e = GeminiDenseEmbedder(
         "gemini-embedding-2-preview",
         api_key=GOOGLE_API_KEY,
@@ -60,6 +61,8 @@ class TestGeminiE2ETextEmbedding:
         assert sim_related > sim_unrelated
 class TestGeminiE2ETaskType:
     def test_query_vs_document_task_types(self):
+        from openviking.models.embedder.gemini_embedders import GeminiDenseEmbedder
+
         doc_embedder = GeminiDenseEmbedder(
             "gemini-embedding-2-preview",
             api_key=GOOGLE_API_KEY,

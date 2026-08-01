@@ -3,6 +3,9 @@
 
 """Global test fixtures"""
 
+# Standalone live-test projects with their own environments and workflows.
+collect_ignore = ["api_test", "oc2ov_test"]
+
 import asyncio
 import shutil
 from pathlib import Path
