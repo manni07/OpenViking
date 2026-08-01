@@ -7,14 +7,46 @@
 collect_ignore = ["api_test", "oc2ov_test"]
 
 import asyncio
-import shutil
+import json
+import os
+import tempfile
 from pathlib import Path
 from typing import AsyncGenerator, Generator
 
 import pytest
 import pytest_asyncio
 
+# Bootstrap imports against a disposable, non-host config.  Several OpenViking
+# modules configure their logger during import; waiting for a function fixture
+# would be too late to prevent a host ``~/.openviking/ov.conf`` read.
+_CONFIG_ENV_NAME = "OPENVIKING_CONFIG_FILE"
+_BOOTSTRAP_TMP = tempfile.TemporaryDirectory(prefix="openviking-root-config-")
+_BOOTSTRAP_CONFIG_PATH = Path(_BOOTSTRAP_TMP.name) / "ov.conf"
+_BOOTSTRAP_WORKSPACE = Path(_BOOTSTRAP_TMP.name) / "workspace"
+_BOOTSTRAP_CONFIG_PATH.write_text(
+    json.dumps(
+        {
+            "storage": {
+                "workspace": str(_BOOTSTRAP_WORKSPACE),
+                "agfs": {"backend": "local"},
+                "vectordb": {"name": "test", "backend": "local", "project": "default"},
+            },
+            "embedding": {
+                "dense": {"provider": "litellm", "model": "root-bootstrap", "dimension": 3}
+            },
+            "vlm": {"provider": None, "model": None},
+        }
+    ),
+    encoding="utf-8",
+)
+os.environ[_CONFIG_ENV_NAME] = str(_BOOTSTRAP_CONFIG_PATH)
+
 from openviking import AsyncOpenViking
+from openviking.models.embedder.base import DenseEmbedderBase, EmbedResult
+from openviking_cli.utils.config import OPENVIKING_CONFIG_ENV
+from openviking_cli.utils.config.embedding_config import EmbeddingConfig
+from openviking_cli.utils.config.open_viking_config import OpenVikingConfigSingleton
+from openviking_cli.utils.config.vlm_config import VLMConfig
 
 
 # ── Workaround: local .so may lack AGFS_Grep symbol (new in latest source) ──
@@ -76,11 +108,6 @@ def _patch_agfs_grep_if_missing():
 
 _patch_agfs_grep_if_missing()
 
-# Test data root directory
-PROJECT_ROOT = Path(__file__).parent.parent
-TEST_TMP_DIR = PROJECT_ROOT / "test_data" / "tmp"
-
-
 @pytest.fixture(scope="session")
 def event_loop():
     """Create session-level event loop"""
@@ -90,11 +117,11 @@ def event_loop():
 
 
 @pytest.fixture(scope="function")
-def temp_dir() -> Generator[Path, None, None]:
-    """Create temp directory, auto-cleanup before and after test"""
-    shutil.rmtree(TEST_TMP_DIR, ignore_errors=True)
-    TEST_TMP_DIR.mkdir(parents=True, exist_ok=True)
-    yield TEST_TMP_DIR
+def temp_dir(tmp_path: Path) -> Generator[Path, None, None]:
+    """Create pytest-owned storage isolated from other tests and workers."""
+    root = tmp_path / "root"
+    root.mkdir()
+    yield root
 
 
 @pytest.fixture(scope="function")
@@ -207,7 +234,82 @@ This is batch file number {i} for testing batch operations.
 
 
 @pytest_asyncio.fixture(scope="function")
-async def client(test_data_dir: Path) -> AsyncGenerator[AsyncOpenViking, None]:
+async def root_openviking_config(
+    test_data_dir: Path, monkeypatch
+) -> AsyncGenerator[dict, None]:
+    """Install a function-scoped, offline config before embedded clients are built.
+
+    The host ``ov.conf`` is intentionally not read by this fixture.  A direct
+    config dictionary also keeps provider endpoints and credentials out of the
+    root test process.
+    """
+    await AsyncOpenViking.reset()
+    OpenVikingConfigSingleton.reset_instance()
+
+    workspace = test_data_dir.resolve()
+    config = {
+        "default_account": "root-fixture",
+        "default_user": "root-fixture",
+        "storage": {
+            "workspace": str(workspace),
+            "agfs": {"backend": "local"},
+            "vectordb": {"name": "test", "backend": "local", "project": "default"},
+        },
+        "embedding": {
+            "dense": {
+                "provider": "litellm",
+                "model": "test-offline",
+                "dimension": 3,
+            }
+        },
+        "vlm": {"provider": None, "model": None},
+    }
+    config_path = test_data_dir.parent / "ov.conf"
+    config_path.write_text(json.dumps(config), encoding="utf-8")
+    monkeypatch.setenv(OPENVIKING_CONFIG_ENV, str(config_path))
+    for env_name in (
+        "OPENAI_API_KEY",
+        "OPENAI_BASE_URL",
+        "ANTHROPIC_API_KEY",
+        "GOOGLE_API_KEY",
+        "OPENVIKING_EMBEDDING_API_KEY",
+        "OPENVIKING_VLM_API_KEY",
+    ):
+        monkeypatch.delenv(env_name, raising=False)
+
+    class RootFixtureEmbedder(DenseEmbedderBase):
+        def __init__(self):
+            super().__init__(model_name="root-fixture-embedder", config={"provider": "test"})
+
+        def embed(self, content, is_query: bool = False) -> EmbedResult:
+            return EmbedResult(dense_vector=[0.0, 0.0, 0.0])
+
+        def get_dimension(self) -> int:
+            return 3
+
+    async def _fake_completion(*_args, **_kwargs) -> str:
+        return "# Root fixture summary"
+
+    async def _fake_vision_completion(*_args, **_kwargs) -> str:
+        return "Root fixture image summary"
+
+    monkeypatch.setattr(EmbeddingConfig, "get_embedder", lambda _self: RootFixtureEmbedder())
+    monkeypatch.setattr(VLMConfig, "is_available", lambda _self: True)
+    monkeypatch.setattr(VLMConfig, "get_completion_async", _fake_completion)
+    monkeypatch.setattr(VLMConfig, "get_vision_completion_async", _fake_vision_completion)
+
+    try:
+        OpenVikingConfigSingleton.initialize(config_dict=config)
+        yield config
+    finally:
+        await AsyncOpenViking.reset()
+        OpenVikingConfigSingleton.reset_instance()
+
+
+@pytest_asyncio.fixture(scope="function")
+async def client(
+    test_data_dir: Path, root_openviking_config
+) -> AsyncGenerator[AsyncOpenViking, None]:
     """Create initialized OpenViking client"""
     await AsyncOpenViking.reset()
 
@@ -216,12 +318,16 @@ async def client(test_data_dir: Path) -> AsyncGenerator[AsyncOpenViking, None]:
 
     yield client
 
-    await client.close()
-    await AsyncOpenViking.reset()
+    try:
+        await client.close()
+    finally:
+        await AsyncOpenViking.reset()
 
 
 @pytest_asyncio.fixture(scope="function")
-async def uninitialized_client(test_data_dir: Path) -> AsyncGenerator[AsyncOpenViking, None]:
+async def uninitialized_client(
+    test_data_dir: Path, root_openviking_config
+) -> AsyncGenerator[AsyncOpenViking, None]:
     """Create uninitialized OpenViking client (for testing initialization flow)"""
     await AsyncOpenViking.reset()
 
@@ -233,7 +339,8 @@ async def uninitialized_client(test_data_dir: Path) -> AsyncGenerator[AsyncOpenV
         await client.close()
     except Exception:
         pass
-    await AsyncOpenViking.reset()
+    finally:
+        await AsyncOpenViking.reset()
 
 
 @pytest_asyncio.fixture(scope="function")
