@@ -152,3 +152,39 @@ Coveragebehauptung. Die bestehende venv lief mit dem Overlay
 
 **Offline Legacy-VLM HOLD aufgehoben; Live M1 bleibt HOLD.** Kein Live-Test,
 keine Aktivierung, Promotion, kein Merge oder Restart.
+
+## 2026-08-01 — Open-Items-Follow-up nach Fork-Merge
+
+**Ausloeser.** Der richtige Fork-PR `manni07/OpenViking#2` war als
+`c4e3cc52272c086843f3dc64808ed1e8956abede` in `origin/main` gemergt; der
+irrtuemliche Upstream-PR #3667 war geschlossen. Der neue isolierte Worktree
+`20260801-open-items-follow-up` sollte die danach noch offline schliessbaren
+Open Items und veralteten Testvertraege bereinigen.
+
+**Entscheidungen und Umsetzung.** Acht verwaiste VolcEngine-Cachetests wurden
+durch drei aktuelle Factory-/Sync-/Async-Chat-Completions-Vertragstests ersetzt.
+Streamfakes wurden in ein nicht sammelbares Supportmodul verschoben; die
+redigierten Senken, Marker-Rueckgabe und Built-in-Post-Event-Cancellation wurden
+gezielt abgesichert. `WatchTask` wechselte minimal auf den Pydantic-v2-Vertrag.
+Versehentlich verlorene lokale Watch-Fixtures, unbeabsichtigte Config-I/O und
+der veraltete Deferred-Testdouble wurden getrennt repariert. Der produktive
+Missing-Payload-Guard blieb unveraendert; kein `wait=True` kaschiert den
+asynchronen Queuevertrag.
+
+**Verifikation.** Fokussierte Zwischenstaende: VolcEngine 129 PASS und 348
+breit vor Folgeaenderungen; Stream 50 und VLM 274; WatchTask 7 unter
+Warning-as-error; Resource 37; Recovery/Scheduler 19; Connector 50; Watch 21;
+Feishu/Queue 23. Der finale Orchestrator-Lauf bestand State/Hook 102/102, die
+konsolidierte 18-Dateien-Matrix 500/500 unter Pydantic Warning-as-error und die
+Watch-Matrix 150/150 nach Ruff-Format. Ruff check, Ruff format und diff-check
+waren gruen. Keine Skips oder Xfails wurden als Ersatzbeleg verwendet.
+
+**Reststatus.** H3, M1-M3 und L1-L3 sind geschlossen; der historische
+Aggregate-Befund heisst eindeutig `SEC-M2`. H1 bleibt vor Credential-/Client-/
+Netzwerk-I/O gesperrt, weil Modell, numerische Limits, Fixture-/Tree-Hashes,
+Preisbasis und Credential-Policies nicht freigegeben sind. H2 wartet auf H1
+PASS und separate Datenfreigabe. Der `agy`-Reviewversuch war wegen fehlender
+Headless-Command-Berechtigung UNAVAILABLE, nicht PASS.
+
+In Task 8 wurden nur Dokumente geaendert. Es erfolgten keine Source-/Testedits,
+externen Calls, Commits, Pushes, Live-Tests, Aktivierungen oder Restarts.
