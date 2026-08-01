@@ -256,6 +256,8 @@ python_functions = ["test_*"]
 asyncio_mode = "auto"
 markers = [
     "integration: tests that require external services or real model configuration",
+    "cli_remote: tests that require a remote OpenViking CLI binary and server connection",
+    "qdrant: tests that require a reachable Qdrant instance",
 ]
 addopts = "-v --cov=openviking --cov-report=term-missing"
 

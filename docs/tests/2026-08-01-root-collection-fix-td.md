@@ -140,3 +140,54 @@ Nicht ausgefuehrt und daher **nicht PASS**:
 - `tests/conftest.py`
 - `tests/integration/test_gemini_e2e.py`
 - `tests/test_test_suite_boundaries.py`
+
+## 8. Warnungsbereinigung und Standalone-Harness — 2026-08-01
+
+Dieser Nachlauf behandelt die zuvor bewusst offenen 15 Root-Warnungen und
+trennt die OpenClaw-Harness weiterhin vom Root-Collector.
+
+### 8.1 RED vor der Änderung
+
+In der frisch erzeugten Worktree-Umgebung schlug der Strict-Marker-Lauf mit
+Exit 2 fehl: elf `cli_remote`- und ein `qdrant`-Marker waren nicht registriert
+(12 Collection-Fehler). Der gezielte Lauf mit
+`-W error::pytest.PytestCollectionWarning` schlug zusätzlich an den drei
+Hilfsklassen `TestModel`, `TestModel` und `TestAccessor` fehl.
+
+### 8.2 Root-GREEN
+
+- `pyproject.toml` registriert jetzt ausschließlich die beiden fehlenden
+  Marker mit ihrer externen Service-Bedeutung.
+- Die drei Supportklassen tragen neutrale Namen
+  `JsonStabilityModel`, `JsonUtilsModel` und `RegistryAccessor`; ihre
+  Testmethoden und Laufzeitsemantik bleiben unverändert.
+- `tests/test_collection_warnings.py` hält Strict-Marker- und
+  `PytestCollectionWarning`-Verträge test-first fest; beide Tests bestehen mit
+  2/2.
+- Mit uv 0.8.20, Python 3.12.11 und der frischen gefrorenen Umgebung sammelt
+  die Root-Suite unter `--strict-markers` 6384 Tests, Exit 0. Die normale
+  Collection sammelt ebenfalls 6384 Tests und meldet keine
+  `Pytest*Warning`-Zeile.
+- Die beiden Supportdateien bestehen isoliert ohne Root-Service-Fixture mit
+  43/43 Tests (`--noconftest`). Ein breiterer Aufruf ohne diese Isolation
+  bleibt wegen der vorhandenen `/Users/turgay/.openviking/ov.conf`-/
+  `/app`-Pfadannahme der allgemeinen Root-Fixture blockiert; das ist kein
+  Fehler der Warnungsänderung.
+
+### 8.3 OpenClaw-Harness, separat und offline
+
+Die Harness-Konfiguration nutzt jetzt ausschließlich `tests` als Testpfad und
+trägt `.` sowie `utils` in `pythonpath`. Die importierten Datenklassen heißen
+`ScenarioData` und `ScenarioDataManager`, sodass `utils/test_utils.py` nicht
+mehr als Testklasse gewarnt wird. `config/settings.py` bleibt absichtlich
+ignoriert und wird nur für einen Lauf aus `settings.example.py` erzeugt.
+
+Der sichere Lauf im eigenen `tests/oc2ov_test/.venv-oc2ov` sammelte mit
+`-W error::pytest.PytestCollectionWarning` 47 Tests, Exit 0. Der ausschließlich
+gemockte Diagnostik-Satz bestand mit 4/4. Die temporäre Beispielkonfiguration
+wurde danach entfernt; es wurden keine Credentials verwendet.
+
+Nicht ausgeführt und daher weiterhin **HOLD**: P0-/OpenClaw-Agent-Aufrufe,
+OpenViking-/OpenClaw-Servicezugriffe, `run.sh`/`run_tests.py`, der Upgrade-
+Workflow sowie H1, H2 und Provider-Live-Tests. Kein Service-, Server-,
+Runtime- oder Rechnerneustart erfolgte.

@@ -625,3 +625,17 @@ RED: 3/3 erwartete Fehler. GREEN: 3/3 PASS. Final: `mcp`/`scrapy` importierbar,
 Gemini-E2E 5 Tests gesammelt, Root 6382 Tests gesammelt, Exit 0. Es gibt keine
 Aenderung an Produktcode, `pyproject.toml`, `uv.lock`, CI, Standalone-Harnesses
 oder Live-Konfiguration.
+
+## 16. Warnungsbereinigung und Harness-Ausführung — 2026-08-01
+
+Die Folgeimplementierung ergänzt die Root-Konfiguration um die zwei fehlenden
+Marker, benennt die drei Pytest-Fehlklassifikationen um und fügt
+`tests/test_collection_warnings.py` hinzu. Im Standalone-Harness werden die
+Testpfade auf `tests` begrenzt, lokale Importpfade explizit gemacht und die
+beiden importierten Daten-Hilfstypen in `ScenarioData`/
+`ScenarioDataManager` umbenannt.
+
+Die Änderung ist auf Tests, Testkonfiguration und Dokumentation beschränkt.
+Der Root-Strict-Lauf und der isolierte Harness-Collection-Lauf sind grün; die
+gemockte Harness-Diagnostik ist 4/4 grün. Kein P0-/Provider-/Credentialpfad,
+kein H1/H2-Aufruf und kein Restart wurde ausgeführt.
