@@ -19,3 +19,136 @@
 **Restarbeit.** Vor Merge die PR-Checks des sicheren Konfigurationsnachtrags abwarten; jede der 74 Baseline-Ausnahmen vor dem 2026-08-27 entfernen oder erneut explizit bewerten. Eine reale Bereitstellung verlangt einen konkret benannten Ziel-Host/-Cluster und dessen nicht-sekrete Konfigurationsreferenzen; lokal ist kein Docker-Daemon und kein Kubernetes-Kontext verfügbar. Kein Rechner- oder Serverneustart wurde ausgeführt oder ist für diese Arbeit angeordnet.
 
 **Betroffener Git-Kontext.** Basis `60ef45d4c3a7d07ceb1df4e9d7dde7a14449ac50`; Arbeitszweig `agent-workflow/20260727-security-hardening` im isolierten Worktree. Draft-PR #1 ist im Fork `manni07/OpenViking` eröffnet; Push/Merge erfolgen nur nach Status-, Diff- und Checkprüfung.
+## Codex-Compaction und OpenViking Responses State
+
+Datum: 2026-07-31
+Status: Offline Legacy-VLM HOLD aufgehoben; Live M1 und Promotion auf HOLD
+
+## Ausgangslage
+
+Die Umsetzung startete in einem isolierten OpenViking-Worktree auf Commit
+`60ef45d4`. Ungetrackte Dateien des Haupt-Checkouts blieben unangetastet. Vor
+potenziellen globalen Codex-Änderungen wurden `config.toml`, `hooks.json` und das
+bestehende Hook-Skript auf einem Backup-Volume gesichert, gehasht und mit
+restriktiven Rechten versehen.
+
+## Arbeitschronik
+
+### 1. Architektur und Stop-Regeln
+
+ARD, TRD und PD definierten einen additiven State-Pfad, einen nicht installierten
+Hook-Kandidaten und fail-closed Live-Gates. `VLMBase`, andere Provider, globale
+Codex-Dateien und laufende Dienste wurden aus dem Änderungsumfang ausgeschlossen.
+
+### 2. Testvertrag
+
+Die neuen Tests wurden auf Kontinuitäts- und Sicherheitsgründe ausgerichtet:
+keine Prompt-Injection aus Hook-Eingaben, keine unsicheren Symlinkpfade, kein
+State-Commit nach Teil-Streams, keine Cross-Chain- oder Tool-Replays und kein
+stiller Capability-Fallback.
+
+### 3. Hook-Implementierung
+
+Der Hook-Kandidat erhielt private Rechte, sichere atomare Dateien,
+komponentenweise Symlink- und Eigentümerprüfungen, Eingabe-/Zeitlimits und feste
+Prompts. Eine abschließende Pfadprüfung führte zu einem zusätzlichen
+Parent-Symlink-Test. Im Offline-Sicherheits-Follow-up wurden alle Dateioperationen
+an Directory-FDs verankert, die Deadline erzwungen und TTL-/Anzahl-/Scan-Limits
+für die Retention ergänzt. Ergebnis: 30 Hook-Tests bestanden.
+
+### 4. Responses-Implementierung
+
+Der Adapter erhielt einen frozen State, kanonische vollständige Output-Items,
+Compaction-Reduktion, commit-on-complete, native Async-Streams, Tool exactly once,
+Bindings, Integrität und harte Limits. `CodexVLM` exponiert additive
+State-Methoden und einen expliziten Probe. Nach einem Security-Veto wurden
+Trace-Redaction, Adapter-Initialisierungsrace, Credential-I/O im Event-Loop und
+unbegrenzte retained Call-ID-Metadaten TDD-geführt gehärtet. Das Follow-up band
+Credentials stabil an ihren persistenten Slot, auch ohne `client_id`, und
+schirmte Stream-/Client-Cleanup gegen wiederholte Cancellation und Close-Fehler
+ab. Ein ergänzender Test stellt sicher, dass ein Close-Fehler die ursprüngliche
+Cancellation nicht verdeckt. Ergebnis: 72 State-/Adaptertests bestanden.
+
+### 5. Konfiguration
+
+`responses_state_enabled` und `responses_compact_threshold` wurden opt-in
+ergänzt. Threshold ohne State und State ohne genau ein `openai-codex`-Credential
+werden abgelehnt. Der Default bleibt aus.
+
+### 6. Verifikation
+
+Frische Kandidatensuiten: 102/102 PASS. Die Core-Kombination lieferte 131 PASS und
+einen Fehler; die erweiterte Kombination 140 PASS und zwölf Fehler. Der einzelne
+Codex-Config-Fehler sowie elf Stream-Config-Fehler wurden auf der unveränderten
+Basis reproduziert. Ruff, Format, Compileall und `git diff --check` bestanden.
+
+Der gemeinsame OpenViking-MCP bestand Health und eine read-only Suche ohne
+Restart. Globale Codex-Dateien blieben identisch zu den SHA-256-verifizierten
+Backups.
+
+Der separate Legacy-VLM-H3-Sicherheitsreview durchlief die maximal drei
+Revisionen: 78/100 (`0C/5H/1M`), 84/100 (`0C/3H/1M`) und final 89/100
+(`0C/1H/1M`). H2–H5 wurden geschlossen; H1, der exakte Konstantenvertrag für
+markierte VikingBot-Fehler, blieb offen. Damit wurden `0H` und 90/100 verfehlt.
+Source-Unlock wurde verweigert; es erfolgte keine Produktionscodeänderung und
+keine vierte H1-Schließungsrevision. Die sechs ergänzten Vertrags-Testdateien
+wurden final mit `266 collected = 129 PASS + 137 fachliche RED` ausgeführt.
+
+OpenViking MCP Health und ein echter read-only `search_experience`-Aufruf waren
+PASS, ohne Restart. Diese Evidenz beweist MCP-Zugriff, nicht die Responses-/
+Compaction-Fähigkeit des Providers. Der User vertagte den Live-Provider-Test.
+
+## Entscheidungen
+
+- 206720 bleibt unveränderte Baseline; 175k wurde nicht übernommen.
+- Capability wird nicht vermutet, sondern muss am exakten Endpoint geprüft
+  werden.
+- Der Probe wurde nicht ausgeführt, weil er potenziell kostenpflichtig ist und
+  ausdrückliche Genehmigung benötigt.
+- Ohne 20 reale und 10 synthetische Szenarien gibt es keine A/B-Siegerwahl.
+- Vorbestehende Legacy-Fehler werden sichtbar als HOLD geführt.
+- Der finale H3-Security-HOLD bleibt bestehen; H1 wird in diesem Lauf nicht
+  weiter revidiert oder implementiert.
+- Der bestandene MCP-Read ist kein Ersatz für einen Provider-Capability-Probe.
+- Der Live-Test wurde auf Wunsch des Users vertagt.
+- Keine Installation, Aktivierung, Promotion, kein Restart und kein Git-Publish.
+
+## Ergebnis
+
+Der Worktree enthält einen offline verifizierten, opt-in Kandidaten und die
+zugehörige Übergabedokumentation. Der Legacy-VLM-H3-Follow-up bleibt wegen H1
+bei verweigertem Source-Unlock auf HOLD. Live-Capability, A/B-Effekt und
+Default-Promotion sind ausdrücklich nicht bewiesen.
+
+## Verweise
+
+- [Implementation Dossier](../dossiers/2026-07-31-codex-compaction-openviking-responses-id.md)
+- [Test Dossier](../tests/2026-07-31-codex-compaction-openviking-responses-td.md)
+- [Lessons Learned](../lessons/2026-07-31-codex-compaction-openviking-responses-lessons-learned.md)
+- [Open Items](../sessions/2026-07-31-codex-compaction-openviking-responses-open-items.md)
+
+## Nachtrag: user-autorisierter Offline-HOLD-Lift
+
+Nach dem alten finalen HOLD autorisierte der User einen neuen Offline-Zyklus.
+Architektur 97/96/100, H1 direkt RED, Pre-Source Security 93/100 bei 0C/0H und
+Implementierungssimulation 96,6 Prozent bei Minimum 95 öffneten den engen
+Sourceumfang. Der erste Stand bestand 267/267, wurde wegen H6 in Security Rev1
+aber bei 86/100, 0C/1H/2M erneut gesperrt.
+
+Fünf neue H6-Tests waren zunächst RED. Die Korrektur verwendet für nicht
+instanzmarkierbare Exceptions einen opaken, klassenmarkierten Wrapper mit dem
+identischen Original als `__cause__`; M2 stoppt beim 257. Aggregate-Kind
+fail-closed, bevor Kind 258 gelesen wird. Ein Test erwartete für einen
+`AllCredentialsFailedError` fälschlich `RuntimeError`; korrigiert wurde nur die
+erwartete konkrete Exceptionklasse. Danach bestanden 5/5, 189/189 und 272/272
+ohne Fail, Skip oder Xfail. Testsimulation 98 Prozent, Minimum 96; Security Rev2
+96/100, 0C/0H/1M, PASS.
+
+Vier bekannte Pydantic-Warnungen blieben sichtbar. Der finale breite Lauf wurde
+vom Worker und vom Supervisor mit 364 PASS plus exakt acht vorbestehenden
+VolcEngine-Konstruktorfehlern reproduziert. Keine breite Vollgrün- oder
+Coveragebehauptung. Die bestehende venv lief mit dem Overlay
+`PYTHONPATH=.:bot:/tmp/openviking-codex-responses-test-deps-20260731`.
+
+**Offline Legacy-VLM HOLD aufgehoben; Live M1 bleibt HOLD.** Kein Live-Test,
+keine Aktivierung, Promotion, kein Merge oder Restart.

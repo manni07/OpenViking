@@ -552,7 +552,6 @@ def has_codex_auth_available() -> bool:
     )
 
 
-
 def resolve_codex_runtime_credentials(
     *,
     force_refresh: bool = False,
@@ -648,6 +647,7 @@ def resolve_codex_runtime_credentials(
                     "source": "openviking",
                     "path": str(ov_auth_path),
                     "auth_owner": CODEX_AUTH_OWNER_OPENVIKING,
+                    "client_id": payload.get("client_id"),
                 }
 
             if should_refresh:
@@ -663,6 +663,7 @@ def resolve_codex_runtime_credentials(
                 "source": "codex-cli",
                 "path": str(ov_auth_path),
                 "auth_owner": CODEX_AUTH_OWNER_EXTERNAL,
+                "client_id": payload.get("client_id"),
             }
         should_refresh = force_refresh or (
             refresh_if_expiring
@@ -692,6 +693,7 @@ def resolve_codex_runtime_credentials(
             "source": "openviking",
             "path": str(ov_auth_path),
             "auth_owner": CODEX_AUTH_OWNER_OPENVIKING,
+            "client_id": payload.get("client_id"),
         }
 
     raise CodexAuthError(
