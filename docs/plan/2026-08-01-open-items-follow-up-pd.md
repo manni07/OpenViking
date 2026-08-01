@@ -223,7 +223,7 @@ nicht durch Offline-Simulation ersetzbar.
 | 6 | CLOSED | Watch 21/21; Feishu/Queue 23/23; kein `wait=True`, kein Produktionsguard-Diff |
 | 7 / H1 | HOLD | Modell, numerische Limits, Fixture-/Tree-Hashes, Preisbasis und Credential-Policies nicht freigegeben |
 | 8 | CLOSED | Bestehende TCCODE-Artefakte auf Fork-Merge und aktuelles Inventar abgeglichen |
-| 9 | PARTIAL/HOLD | lokale Reviews und Offline-Verifikation vorhanden; kein Commit, Push, PR, Live-Schritt oder Aktivierung in diesem Task |
+| 9 | CLOSED (offline publication) | vier getrennte Commits; Fork-PR #3; alle ausgefuehrten PR-Gates PASS; Merge-Commit `ed77c27ef1af17fd555ffb59d413b0b909c2ec11` |
 
 Finale konsolidierte Orchestrator-Evidenz: State/Hook 102/102,
 18-Dateien-Matrix 500/500 unter Pydantic Warning-as-error und finale
@@ -231,11 +231,16 @@ Watch-Matrix 150/150 nach Ruff-Format. Ruff check, Ruff format und
 `git diff --check` sind PASS. Die fruehere `364 PASS + 8 FAIL`-Matrix ist
 historische Baseline, kein aktueller Restfehlerbestand.
 
-Der richtige Merge ist Fork-PR `manni07/OpenViking#2` auf
-`c4e3cc52272c086843f3dc64808ed1e8956abede`. Der irrtuemliche Upstream-PR
-`volcengine/OpenViking#3667` ist geschlossen. Aktiver Worktree ist
-`/Volumes/ExtremePro/projects/OpenViking-agent-worktrees/20260801-open-items-follow-up`
-auf Branch `agent-workflow/20260801-open-items-follow-up`.
+Der Follow-up-Head `de9f6e3cc8ee3dcb9f6d64c2ed9fd3ec4865d369`
+wurde ueber Fork-PR `manni07/OpenViking#3` als Merge-Commit
+`ed77c27ef1af17fd555ffb59d413b0b909c2ec11` in `origin/main` aufgenommen.
+Der vorherige richtige Merge bleibt Fork-PR #2; der irrtuemliche Upstream-PR
+`volcengine/OpenViking#3667` ist geschlossen. Der Implementierungsbranch und
+der isolierte Worktree wurden zur Nachvollziehbarkeit nicht geloescht.
+
+Die PR-Gates bestanden: API & CLI Integration auf Ubuntu in 23m07s sowie
+Plugin-, Docs- und Dependency-Checks. Build und cuVS wurden vom unveraenderten
+Pfadfilter erwartungsgemaess uebersprungen, nicht als PASS gezaehlt.
 
 Der angeforderte `agy`-Review war wegen Headless-Command-Berechtigung nicht
 verfuegbar und wird nicht als PASS gewertet. H1/H2 bleiben fail-closed; es gab
