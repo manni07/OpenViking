@@ -205,3 +205,31 @@ vorbestehenden optionalen Dependency-/Subprojekt-Collectionfehlern ohne
 Testurteil; dies ist im Testdossier fail-loud erfasst. H1/H2 bleiben trotz des
 Publikationsabschlusses HOLD. Kein Live-Probe, Canary, Credential-Aufruf,
 Restart oder Upstream-Schreibzugriff erfolgte.
+
+## 2026-08-01 — Root-Collection-Fehler geschlossen
+
+**Ausloeser.** Die 20 Fehler wurden erneut in acht Environment-Fehler, elf
+Suite-Ownership-Fehler und einen optionalen Gemini-Importfehler zerlegt. Der
+Agent-Workflow-v4-Orchestrator gab den reduzierten Plan mit 98,4 Prozent
+Architektur-, 97,0 Prozent Test- und 96 Prozent Security-Score frei.
+
+**Umsetzung.** Ein frischer Worktree von Fork-`main` erhielt eine eigene,
+gefrorene uv-Umgebung. Der Root-Collector ignoriert nur `api_test` und
+`oc2ov_test`. Der Gemini-E2E-Test importiert das optionale Backend erst in den
+beiden Laufzeitpfaden. Ein neues Regressionstestmodul prueft die exakte Grenze,
+providerfreie Collection und den lauten Missing-Extra-Fehler.
+
+**TDD und Verifikation.** Vor dem Fix schlugen alle drei neuen Tests aus den
+beabsichtigten Gruenden fehl. Danach bestanden 3/3. uv 0.8.20 baute mit Python
+3.12.11 die lockfile-identische `--extra test`-venv; `mcp` 1.28.1 und `scrapy`
+2.16.0 sind importierbar. Gemini sammelt ohne Key und ohne `google.genai` fuenf
+Tests. Die vollstaendige Root-Collection sammelte 6382 Tests in 18,07 Sekunden
+mit Exit 0 und null Collection-Fehlern. Ein zweiter Node-Grenzcheck bestaetigte,
+dass keine Standalone-Node-ID enthalten ist und ein Root-Sentinel vorhanden
+bleibt. `git diff --check` ist gruen; `pyproject.toml` und `uv.lock` sind
+unveraendert.
+
+**Reststatus.** Elf `cli_remote`-, eine `qdrant`- und drei Hilfsklassen-
+Warnungen bleiben offen und wurden nicht als behoben gewertet. Die beiden
+Standalone-Harnesses wurden nicht ausgefuehrt und erhalten kein PASS. H1/H2,
+Live-Provider, Credentials, Services und Restarts blieben unberuehrt.

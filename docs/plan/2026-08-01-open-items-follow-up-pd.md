@@ -261,3 +261,34 @@ keinen Live-Aufruf, Canary, Restart oder Aktivierung.
 Beide Simulationen erreichen mindestens 95 Prozent aggregiert und mindestens
 96 Prozent je Einzelkriterium. Sie bewerten den Offline-Diff und ersetzen weder
 den ausstehenden H1-Live-Probe noch H2-Canary-Evidenz.
+
+## 9. Root-Collection-Follow-up — 2026-08-01
+
+Der eng begrenzte Offline-Follow-up beseitigt die zuvor dokumentierten 20
+Collection-Fehler ursachengerecht. Eine frische Worktree-venv aus `uv.lock`
+mit uv 0.8.20 und Python 3.12.11 stellt die verpflichtenden Abhaengigkeiten
+`mcp` und `scrapy` bereit. Die Root-Suite nimmt die eigenstaendigen Live-
+Harnesses `tests/api_test` und `tests/oc2ov_test` nicht mehr in ihren Prozess
+auf. Der Gemini-E2E-Test importiert sein optionales Provider-Modul erst bei
+tatsaechlicher Testausfuehrung und bleibt bei fehlendem Extra fail-loud.
+
+Das neue TDD-Paket war vor der Aenderung mit 3/3 erwarteten Fehlern RED und ist
+danach mit 3/3 PASS GREEN. Der Gemini-E2E-Baum sammelt ohne API-Key und ohne
+`google.genai` fuenf Tests. Die vollstaendige Root-Collection endet mit 6382
+gesammelten Tests, Exit 0 und null Collection-Fehlern. Die elf unbekannten
+`cli_remote`-Marker, ein unbekannter `qdrant`-Marker und drei bekannte
+Hilfsklassen-Warnungen bleiben sichtbar ausserhalb dieses atomaren Pakets.
+Die beiden Standalone-Harnesses wurden nicht ausgefuehrt und sind daher weder
+PASS noch Teil dieses Root-Beweises. H1/H2 bleiben HOLD; kein Provider-,
+Credential-, Service- oder Restart-Pfad wurde ausgefuehrt.
+
+Der TCCODE-`agy`-Review wurde erneut versucht. Der erste Aufruf war wegen einer
+abweichenden CLI-Argumentauswertung off-target und wurde verworfen; der anhand
+von `agy --help` korrigierte read-only Headless-Aufruf wurde mangels
+`command`-Berechtigung automatisch abgelehnt. Es wurde kein
+`--dangerously-skip-permissions` verwendet. Damit ist `agy` fuer dieses Paket
+UNAVAILABLE und kein PASS; es gab kein verwertbares Feedback einzuarbeiten.
+
+Das unabhaengige finale Source-/Testreview ergab PASS ohne Veto: Security
+98/100, Code/API 97/100 und Tests 95/100. Der verifizierte
+Implementierungscommit ist `9a2bcd130e47ef0e9109ba7902e0335c537a690b`.
