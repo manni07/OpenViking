@@ -17,16 +17,24 @@ Fortsetzung gelten die Identitaet, das Testinventar und die Gates hier.
 | Repository/Fork | `manni07/OpenViking` (`origin`) |
 | Upstream | `volcengine/OpenViking` (`upstream`) |
 | Worktree | `/Volumes/ExtremePro/projects/OpenViking-agent-worktrees/20260801-open-items-follow-up` |
-| Branch | `agent-workflow/20260801-open-items-follow-up` |
-| Basis/aktueller Branch-HEAD | `c4e3cc52272c086843f3dc64808ed1e8956abede` |
-| Richtiger Merge | Fork-PR `manni07/OpenViking#2`, in `origin/main` gemergt |
+| Aktueller Publication-Record-Branch | `agent-workflow/20260801-open-items-publication-record` |
+| Publication-Record-Startbasis | `ed77c27ef1af17fd555ffb59d413b0b909c2ec11`; danach ausschliesslich dieser Dokumentationsabschluss |
+| Implementierungsbranch | `agent-workflow/20260801-open-items-follow-up` (retained) |
+| Implementierungsbasis | `c4e3cc52272c086843f3dc64808ed1e8956abede` |
+| Implementierungs-HEAD | `de9f6e3cc8ee3dcb9f6d64c2ed9fd3ec4865d369` |
+| Follow-up-Merge | Fork-PR `manni07/OpenViking#3`, Merge-Commit `ed77c27ef1af17fd555ffb59d413b0b909c2ec11` |
+| Vorheriger Merge | Fork-PR `manni07/OpenViking#2`, Commit `c4e3cc52272c086843f3dc64808ed1e8956abede` |
 | Falscher PR | Upstream-PR `volcengine/OpenViking#3667`, geschlossen |
 | Aktivierung/Live | nicht erfolgt |
 
-Der Worktree enthaelt uncommittete, absichtliche Source-, Test- und
-Dokumentationsaenderungen dieses Follow-ups. Vor Fortsetzung sind `git status`,
-Branch und HEAD read-only zu pruefen. Keine fremden Aenderungen verwerfen und
-kein Rebase, Reset, Merge, Commit, Push oder PR ohne neue Autorisierung.
+Die Implementierung ist committed, zum Fork gepusht und ueber PR #3 in
+`origin/main` gemergt. Der Implementierungsbranch und der isolierte Worktree
+wurden nicht geloescht. Der aktuelle Publication-Record-Branch ist ein reiner
+Dokumentationsnachfahre der angegebenen Startbasis; sein finaler Commit kann
+nicht selbstreferenziell im selben Commit fixiert werden. Vor Fortsetzung sind
+`git status`, Branch, `git rev-parse HEAD` und das aktuelle `origin/main`
+read-only zu pruefen. Keine fremden Aenderungen verwerfen und kein Rebase,
+Reset, Merge, Commit, Push oder PR ohne neue Autorisierung.
 
 ## 2. Abschlussklassifikation
 
@@ -72,6 +80,8 @@ diesem Follow-up nicht geaendert.
 | Responses-State + Hook | 102/102 PASS |
 | konsolidierte 18-Dateien-Matrix, Pydantic-Warnungen als Fehler | 500/500 PASS |
 | finale Watch-Matrix nach Ruff-Format | 150/150 PASS |
+| Fork-PR #3 API & CLI Integration (Ubuntu) | PASS in 23m07s |
+| Fork-PR #3 Plugin-/Docs-/Dependency-Checks | PASS |
 | Ruff check / Ruff format / `git diff --check` | PASS |
 | Skip/Xfail | keine als Ersatzbeleg verwendet |
 

@@ -188,3 +188,20 @@ Headless-Command-Berechtigung UNAVAILABLE, nicht PASS.
 
 In Task 8 wurden nur Dokumente geaendert. Es erfolgten keine Source-/Testedits,
 externen Calls, Commits, Pushes, Live-Tests, Aktivierungen oder Restarts.
+
+## 2026-08-01 — Publikationsabschluss des Open-Items-Follow-ups
+
+Der Follow-up wurde in vier getrennten Commits auf
+`agent-workflow/20260801-open-items-follow-up` veroeffentlicht. Fork-PR
+`manni07/OpenViking#3` bestand API & CLI Integration auf Ubuntu in 23m07s,
+Plugin-Tests, Docs-Build und Dependency-Check. Build und cuVS waren durch den
+unveraenderten Pfadfilter uebersprungen und wurden nicht als PASS gezaehlt.
+
+GitHub mergte den gebundenen Head
+`de9f6e3cc8ee3dcb9f6d64c2ed9fd3ec4865d369` als
+`ed77c27ef1af17fd555ffb59d413b0b909c2ec11` in den Fork. Der Branch und der
+isolierte Worktree blieben erhalten. Ein Root-Vollsuiteversuch blieb wegen 20
+vorbestehenden optionalen Dependency-/Subprojekt-Collectionfehlern ohne
+Testurteil; dies ist im Testdossier fail-loud erfasst. H1/H2 bleiben trotz des
+Publikationsabschlusses HOLD. Kein Live-Probe, Canary, Credential-Aufruf,
+Restart oder Upstream-Schreibzugriff erfolgte.

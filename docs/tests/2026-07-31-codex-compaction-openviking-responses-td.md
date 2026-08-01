@@ -970,3 +970,27 @@ PYTHONPATH=.:bot:/tmp/openviking-codex-responses-test-deps-20260731 \
   tests/parse/test_feishu_parser_api.py \
   tests/service/test_resource_service_connector.py
 ```
+
+## 17. Publikations- und Online-Evidenz — 2026-08-01
+
+Der verifizierte Implementierungs-HEAD
+`de9f6e3cc8ee3dcb9f6d64c2ed9fd3ec4865d369` wurde ueber Fork-PR
+`manni07/OpenViking#3` gemergt. Alle fuer den PR ausgefuehrten Gates bestanden:
+
+- API & CLI Integration Tests auf Ubuntu: PASS in 23m07s;
+- Plugin-Tests: PASS;
+- Docs-Build: PASS;
+- Dependency-Check: PASS.
+
+Build und cuVS waren wegen unveraendertem Scope vom Workflow uebersprungen und
+werden nicht als PASS ausgewiesen. Ein zusaetzlicher Root-`pytest tests`-Versuch
+war kein gueltiger Vollsuite-Beleg: Nach isolierter Ergaenzung von `pytest-html`
+brach die Sammlung an 20 unveraenderten optionalen Dependency-/Subprojekt-
+Problemen ab (`psutil`, `google.genai`, `scrapy`, `mcp` und `oc2ov_test`-
+Importroots). Die offizielle `_test_full.yml` ersetzt die volle Unit-Suite
+derzeit ebenfalls explizit durch den Lite-Integrationstest. Diese Collection-
+Probleme wurden nicht als Kandidatenregression oder als gruene Tests umgedeutet.
+
+Merge-Commit in `origin/main`:
+`ed77c27ef1af17fd555ffb59d413b0b909c2ec11`. Es gab keinen Codex-Live-Probe,
+Canary, Credential-Aufruf, Restart oder Default-Promotion.
