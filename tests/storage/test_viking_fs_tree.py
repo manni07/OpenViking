@@ -12,7 +12,9 @@ from openviking_cli.session.user_id import UserIdentifier
 
 
 class _DummyAgfs:
-    pass
+    def stat(self, _path):
+        """Tree tests replace enumeration; existence checks still need a backend contract."""
+        return {"isDir": True}
 
 
 class _FixedDatetime(datetime):

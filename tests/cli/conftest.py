@@ -252,8 +252,15 @@ def _resolve_bin():
     import sys as _sys
 
     bin_dir = os.path.dirname(_sys.executable)
+    project_bin_dir = Path(__file__).resolve().parents[2] / "openviking" / "bin"
     for name in ("openviking", "ov"):
-        for d in [bin_dir, "/usr/local/bin", "/usr/bin", os.path.expanduser("~/.local/bin")]:
+        for d in [
+            bin_dir,
+            str(project_bin_dir),
+            "/usr/local/bin",
+            "/usr/bin",
+            os.path.expanduser("~/.local/bin"),
+        ]:
             candidate = os.path.join(d, name)
             if os.path.isfile(candidate):
                 return candidate
@@ -607,7 +614,7 @@ def _find_file_in_pack(pack_uri, retries=10, interval=5):
     return None
 
 
-@pytest.fixture(scope="session", autouse=True)
+@pytest.fixture(scope="session")
 def ensure_resources_dir():
     r = ov_mkdir("viking://resources")
     if r["exit_code"] != 0:

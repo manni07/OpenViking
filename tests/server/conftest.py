@@ -18,6 +18,7 @@ import pytest_asyncio
 import uvicorn
 
 from openviking import AsyncOpenViking
+from openviking_cli.client.http import AsyncHTTPClient
 from openviking.models.embedder.base import DenseEmbedderBase, EmbedResult
 from openviking.server.app import create_app
 from openviking.server.config import ServerConfig
@@ -74,7 +75,32 @@ def _install_fake_embedder(monkeypatch):
 def _install_fake_vlm(monkeypatch):
     """Use a fake VLM so server tests never hit external LLM APIs."""
 
+    class FakeVLM:
+        model = "server-test-vlm"
+
+        async def get_completion_async(self, prompt="", **_kwargs):
+            if "context query planner" in str(prompt).lower():
+                return '{"queries": [], "reasoning": "server test fixture"}'
+            if "extract user-private configuration items" in str(prompt):
+                return '{"values": {"api_key": "secret-xyz", "base_url": "https://example.com"}}'
+            return "# Test Summary\n\nFake summary for testing.\n\n## Details\nTest content."
+
+        def get_completion(self, prompt="", **_kwargs):
+            if "context query planner" in str(prompt).lower():
+                return '{"queries": [], "reasoning": "server test fixture"}'
+            return "# Test Summary\n\nFake summary for testing.\n\n## Details\nTest content."
+
+        async def get_vision_completion_async(self, *_args, **_kwargs):
+            return "Fake image description for testing."
+
+        def get_vision_completion(self, *_args, **_kwargs):
+            return "Fake image description for testing."
+
+    fake_vlm = FakeVLM()
+
     async def _fake_get_completion(self, prompt, thinking=False):
+        if "context query planner" in str(prompt).lower():
+            return '{"queries": [], "reasoning": "server test fixture"}'
         if "extract user-private configuration items" in prompt:
             return '{"values": {"api_key": "secret-xyz", "base_url": "https://example.com"}}'
         return "# Test Summary\n\nFake summary for testing.\n\n## Details\nTest content."
@@ -85,6 +111,7 @@ def _install_fake_vlm(monkeypatch):
     monkeypatch.setattr(VLMConfig, "is_available", lambda self: True)
     monkeypatch.setattr(VLMConfig, "get_completion_async", _fake_get_completion)
     monkeypatch.setattr(VLMConfig, "get_vision_completion_async", _fake_get_vision_completion)
+    monkeypatch.setattr(VLMConfig, "get_vlm_instance", lambda _self: fake_vlm)
 
 
 def _install_session_commit_queue_fallback(service: OpenVikingService, monkeypatch) -> None:
@@ -238,7 +265,7 @@ async def running_server(temp_dir: Path, monkeypatch):
     _install_fake_vlm(monkeypatch)
 
     @asynccontextmanager
-    async def _noop_mcp_lifespan():
+    async def _noop_mcp_lifespan(_session_manager=None):
         yield
 
     monkeypatch.setattr("openviking.server.mcp_endpoint.mcp_lifespan", _noop_mcp_lifespan)
@@ -295,3 +322,23 @@ async def running_server(temp_dir: Path, monkeypatch):
     thread.join(timeout=5)
     await svc.close()
     await AsyncOpenViking.reset()
+
+
+@pytest_asyncio.fixture(scope="function")
+async def http_client(running_server):
+    """Share the real SDK client fixture with server-side filter regressions."""
+    port, svc, sdk_user_key = running_server
+    client = AsyncHTTPClient(
+        url=f"http://127.0.0.1:{port}",
+        api_key=sdk_user_key,
+        account="",
+        user="",
+        timeout=33.0,
+        extra_headers={},
+        profile_enabled=False,
+    )
+    await client.initialize()
+    try:
+        yield client, svc
+    finally:
+        await client.close()

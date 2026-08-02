@@ -116,11 +116,44 @@ def test_root_fixture_safe_file_contains_no_provider_endpoints(root_openviking_c
     assert raw["vlm"].get("providers", {}) == {}
 
 
+def test_root_fixture_config_file_is_private(root_openviking_config):
+    """The native-readable disposable config must not be world-readable."""
+    config_path = Path(os.environ[OPENVIKING_CONFIG_ENV])
+    assert config_path.stat().st_mode & 0o777 == 0o600
+
+
+def test_direct_constructor_path_isolated_from_host_config(tmp_path, monkeypatch):
+    """Direct service/client constructors honor their temporary path early."""
+    host_config = tmp_path / "host-ov.conf"
+    _write_host_style_config(host_config)
+    workspace = tmp_path / "direct-constructor-workspace"
+
+    OpenVikingConfigSingleton.reset_instance()
+    monkeypatch.setenv(OPENVIKING_CONFIG_ENV, str(host_config))
+    original_mkdir = Path.mkdir
+
+    def reject_container_path(self, *args, **kwargs):
+        if self == Path("/app") or Path("/app") in self.parents:
+            raise AssertionError("direct constructor attempted to create /app")
+        return original_mkdir(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "mkdir", reject_container_path)
+    try:
+        config = initialize_openviking_config(path=str(workspace))
+    finally:
+        OpenVikingConfigSingleton.reset_instance()
+
+    assert Path(config.storage.workspace) == workspace.resolve()
+
+
 def test_root_fixture_uses_deterministic_fake_embedder(root_openviking_config):
     """Embedding calls in clients using the root fixture never reach LiteLLM."""
-    embedder = get_openviking_config().embedding.get_embedder()
+    config = get_openviking_config()
+    assert config.embedding.dimension % 4 == 0
+    embedder = config.embedding.get_embedder()
     result = embedder.embed("offline regression")
-    assert result.dense_vector == [0.0, 0.0, 0.0]
+    assert len(result.dense_vector) == config.embedding.dimension
+    assert result.dense_vector == [0.0] * config.embedding.dimension
 
 
 @pytest.mark.asyncio
@@ -181,7 +214,7 @@ def test_cached_config_is_still_resynchronized_for_embedded_path(tmp_path):
                 "agfs": {"backend": "local"},
                 "vectordb": {"name": "test", "backend": "local", "project": "default"},
             },
-            "embedding": {"dense": {"provider": "litellm", "model": "test", "dimension": 3}},
+            "embedding": {"dense": {"provider": "litellm", "model": "test", "dimension": 4}},
         }
     )
     try:

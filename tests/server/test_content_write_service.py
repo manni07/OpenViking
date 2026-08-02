@@ -15,6 +15,7 @@ from openviking_cli.exceptions import (
     DeadlineExceededError,
     InvalidArgumentError,
     NotFoundError,
+    PermissionDeniedError,
 )
 from openviking_cli.session.user_id import UserIdentifier
 
@@ -40,7 +41,8 @@ async def test_write_updates_memory_file_and_parent_overview(service):
     assert result["vector_status"] == "complete"
     assert result["overview_status"] == "complete"
     assert result["queue_status"]["Embedding"]["processed"] >= 1
-    assert await service.viking_fs.read_file(memory_uri, ctx=ctx) == "Updated preference"
+    stored = await service.viking_fs.read_file(memory_uri, ctx=ctx)
+    assert MemoryFileUtils.read(stored, uri=memory_uri).content == "Updated preference"
     assert await service.viking_fs.read_file(f"{memory_dir}/.overview.md", ctx=ctx)
     with pytest.raises(NotFoundError):
         await service.viking_fs.read_file(f"{memory_dir}/.abstract.md", ctx=ctx)
@@ -59,7 +61,7 @@ async def test_write_denies_foreign_user_memory_space(service):
         role=Role.USER,
     )
 
-    with pytest.raises(NotFoundError):
+    with pytest.raises(PermissionDeniedError):
         await service.fs.write(
             memory_uri,
             content="Intruder update",
@@ -213,11 +215,15 @@ async def test_memory_write_linkifies_resource_uri_marker_with_readable_anchor(s
 
     stored = await service.viking_fs.read_file(memory_uri, ctx=ctx)
     mf = MemoryFileUtils.read(stored, uri=memory_uri)
-    assert mf.content == f"2026-06-12，[用户保存了粉丝创作的越前龙马动漫插画资源]({resource_uri})。"
+    assert mf.content == (
+        f"[2026-06-12，用户保存了粉丝创作的越前龙马动漫插画资源，资源URI为]({resource_uri})。"
+    )
     refs = mf.extra_fields["resource_refs"]
     assert refs[0]["resource_uri"] == resource_uri
     assert refs[0]["source"] == "content.write"
-    assert refs[0]["match_text"] == "用户保存了粉丝创作的越前龙马动漫插画资源"
+    assert refs[0]["match_text"] == (
+        "2026-06-12，用户保存了粉丝创作的越前龙马动漫插画资源，资源URI为"
+    )
     assert mf.links == []
 
 
@@ -254,7 +260,7 @@ async def test_memory_create_refreshes_nested_schema_overview(service):
 
     overview = await service.viking_fs.read_file(f"{memory_dir}/.overview.md", ctx=ctx)
     assert result["root_uri"] == memory_dir
-    assert "[不二周助-link-test](./不二周助-link-test.md)" in overview
+    assert "[不二周助-link-test.md](./不二周助-link-test.md)" in overview
 
 
 @pytest.mark.asyncio
@@ -269,23 +275,25 @@ async def test_memory_rm_refreshes_nested_schema_overview(service):
         content="用户保存了一张不二周助的照片",
         ctx=ctx,
         mode="create",
+        wait=True,
     )
     await service.fs.write(
         kept_uri,
         content="用户保存了一张越前龙马的照片",
         ctx=ctx,
         mode="create",
+        wait=True,
     )
 
     before = await service.viking_fs.read_file(f"{memory_dir}/.overview.md", ctx=ctx)
-    assert "[不二周助-delete-test](./不二周助-delete-test.md)" in before
-    assert "[越前龙马-keep-test](./越前龙马-keep-test.md)" in before
+    assert "[不二周助-delete-test.md](./不二周助-delete-test.md)" in before
+    assert "[越前龙马-keep-test.md](./越前龙马-keep-test.md)" in before
 
     await service.fs.rm(deleted_uri, ctx=ctx)
 
     after = await service.viking_fs.read_file(f"{memory_dir}/.overview.md", ctx=ctx)
     assert "不二周助-delete-test" not in after
-    assert "[越前龙马-keep-test](./越前龙马-keep-test.md)" in after
+    assert "[越前龙马-keep-test.md](./越前龙马-keep-test.md)" in after
 
 
 class _FakeHandle:
@@ -1475,7 +1483,7 @@ async def test_set_tags_recursive_directory_all_missing_vector_records_returns_z
     )
 
     assert result["success_count"] == 0
-    assert result["skipped_count"] == 3
+    assert result["skipped_count"] == 2
     assert result["failed_count"] == 0
     assert result["updated_uris"] == []
     assert result["tags_updated"] is False

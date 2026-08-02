@@ -3,13 +3,19 @@ from unittest.mock import AsyncMock, MagicMock
 
 import httpx
 import pytest
-import vikingbot.providers.vlm_adapter as vlm_adapter
-from vikingbot.providers.vlm_adapter import VLMProviderAdapter
 from volcenginesdkarkruntime._exceptions import ArkRateLimitError
+
+vlm_adapter = pytest.importorskip(
+    "vikingbot.providers.vlm_adapter",
+    reason="vikingbot is exercised by the standalone bot pytest manifest",
+)
+VLMProviderAdapter = vlm_adapter.VLMProviderAdapter
 
 import openviking.utils.model_retry as model_retry
 from openviking.models.vlm.backends.openai_vlm import OpenAIVLM
 from openviking.utils.model_retry import is_retryable_rate_limit_error
+
+pytestmark = pytest.mark.bot
 
 
 class _DisabledLangfuse:

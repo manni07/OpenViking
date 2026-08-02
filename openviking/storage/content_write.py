@@ -809,6 +809,8 @@ class ContentWriteCoordinator:
             )
             return [str(record.get("uri")) for record in updated_records if record.get("uri")]
         updated_records = await store.update_search_tags(uri, tags, mode=mode, ctx=ctx)
+        if isinstance(updated_records, bool):
+            return [uri] if updated_records else []
         if not updated_records:
             return []
         return [str(record.get("uri")) for record in updated_records if record.get("uri")]
@@ -866,7 +868,15 @@ class ContentWriteCoordinator:
                     raise InvalidArgumentError(
                         f"memory write target must be inside a memory type directory: {uri}"
                     )
-                root_uri = VikingURI.build(*parts[: memories_idx + 2])
+                if anchor_to_parent:
+                    # Keep the refresh root stable for nested memory files.  If the
+                    # memory-type directory already exists, resolving to it would
+                    # otherwise skip the direct parent overview on subsequent writes.
+                    parent = parsed.parent
+                    if parent is not None:
+                        root_uri = parent.uri
+                else:
+                    root_uri = VikingURI.build(*parts[: memories_idx + 2])
 
         stat = await self._safe_stat(root_uri, ctx=ctx, allow_not_found=_allow_not_found)
         if stat.get("not_found") or not stat.get("isDir"):

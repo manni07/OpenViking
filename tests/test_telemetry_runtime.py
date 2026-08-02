@@ -910,8 +910,8 @@ async def test_resource_service_add_resource_reports_queue_summary(monkeypatch):
         def register_request(self, telemetry_id: str) -> None:
             del telemetry_id
 
-        async def wait_for_request(self, telemetry_id: str, timeout=None) -> None:
-            del telemetry_id, timeout
+        async def wait_for_request(self, telemetry_id: str, timeout=None, poll_interval=None) -> None:
+            del telemetry_id, timeout, poll_interval
 
         def build_queue_status(self, telemetry_id: str):
             del telemetry_id

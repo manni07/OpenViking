@@ -6,9 +6,9 @@
 # Standalone live-test projects with their own environments and workflows.
 collect_ignore = ["api_test", "oc2ov_test"]
 
-import asyncio
 import json
 import os
+import sys
 import tempfile
 from pathlib import Path
 from typing import AsyncGenerator, Generator
@@ -16,12 +16,69 @@ from typing import AsyncGenerator, Generator
 import pytest
 import pytest_asyncio
 
+
+def pytest_collection_modifyitems(config, items):
+    """Keep the root process free of the standalone bot import path.
+
+    Bot-marked tests are collected for visibility but executed by the separate
+    bot pytest manifest, where the bot package and its warning policy are
+    intentionally isolated from the OpenViking root suite.
+    """
+    bot_root = str(Path(__file__).resolve().parents[1] / "bot")
+    configured_paths = {str(Path(entry).resolve()) for entry in os.sys.path if entry}
+    if bot_root in configured_paths:
+        return
+    skip_bot = pytest.mark.skip(reason="run via the standalone bot pytest manifest")
+    for item in items:
+        if item.get_closest_marker("bot") is not None:
+            item.add_marker(skip_bot)
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def _cleanup_litellm_logging_worker():
+    """Stop LiteLLM's per-loop callback worker before pytest closes the loop.
+
+    LiteLLM owns a process-global worker but binds its queue to the current
+    asyncio loop.  Without an explicit test-boundary cleanup, the worker's
+    ``queue.get()`` coroutine survives loop teardown and emits an unraisable
+    ``Event loop is closed`` warning in later tests.
+    """
+    yield
+
+    worker_module = sys.modules.get("litellm.litellm_core_utils.logging_worker")
+    worker = getattr(worker_module, "GLOBAL_LOGGING_WORKER", None)
+    if worker is None:
+        return
+
+    await worker.stop()
+    await worker.clear_queue()
+
+
+@pytest.fixture
+def offline_test_models(monkeypatch):
+    """Patch model factories for direct-service tests without changing config state."""
+
+    class _OfflineEmbedder(DenseEmbedderBase):
+        def __init__(self):
+            super().__init__(model_name="root-offline-embedder", config={"provider": "test"})
+
+        def embed(self, content, is_query: bool = False) -> EmbedResult:
+            del content, is_query
+            return EmbedResult(dense_vector=[0.0, 0.0, 0.0, 0.0])
+
+        def get_dimension(self) -> int:
+            return 4
+
+    monkeypatch.setattr(EmbeddingConfig, "get_embedder", lambda _self: _OfflineEmbedder())
+
 # Bootstrap imports against a disposable, non-host config.  Several OpenViking
 # modules configure their logger during import; waiting for a function fixture
 # would be too late to prevent a host ``~/.openviking/ov.conf`` read.
 _CONFIG_ENV_NAME = "OPENVIKING_CONFIG_FILE"
+_CLI_CONFIG_ENV_NAME = "OPENVIKING_CLI_CONFIG_FILE"
 _BOOTSTRAP_TMP = tempfile.TemporaryDirectory(prefix="openviking-root-config-")
 _BOOTSTRAP_CONFIG_PATH = Path(_BOOTSTRAP_TMP.name) / "ov.conf"
+_BOOTSTRAP_CLI_CONFIG_PATH = Path(_BOOTSTRAP_TMP.name) / "ovcli.conf"
 _BOOTSTRAP_WORKSPACE = Path(_BOOTSTRAP_TMP.name) / "workspace"
 _BOOTSTRAP_CONFIG_PATH.write_text(
     json.dumps(
@@ -32,14 +89,19 @@ _BOOTSTRAP_CONFIG_PATH.write_text(
                 "vectordb": {"name": "test", "backend": "local", "project": "default"},
             },
             "embedding": {
-                "dense": {"provider": "litellm", "model": "root-bootstrap", "dimension": 3}
+                "dense": {"provider": "litellm", "model": "root-bootstrap", "dimension": 4}
             },
             "vlm": {"provider": None, "model": None},
         }
     ),
     encoding="utf-8",
 )
+_BOOTSTRAP_CONFIG_PATH.chmod(0o600)
 os.environ[_CONFIG_ENV_NAME] = str(_BOOTSTRAP_CONFIG_PATH)
+# Do not let the root suite consume a developer's personal CLI profile.  The
+# path intentionally remains absent; tests that need a profile provide one
+# explicitly through monkeypatch or their subprocess environment.
+os.environ[_CLI_CONFIG_ENV_NAME] = str(_BOOTSTRAP_CLI_CONFIG_PATH)
 
 from openviking import AsyncOpenViking
 from openviking.models.embedder.base import DenseEmbedderBase, EmbedResult
@@ -107,14 +169,6 @@ def _patch_agfs_grep_if_missing():
 
 
 _patch_agfs_grep_if_missing()
-
-@pytest.fixture(scope="session")
-def event_loop():
-    """Create session-level event loop"""
-    loop = asyncio.new_event_loop()
-    yield loop
-    loop.close()
-
 
 @pytest.fixture(scope="function")
 def temp_dir(tmp_path: Path) -> Generator[Path, None, None]:
@@ -259,13 +313,14 @@ async def root_openviking_config(
             "dense": {
                 "provider": "litellm",
                 "model": "test-offline",
-                "dimension": 3,
+                "dimension": 4,
             }
         },
         "vlm": {"provider": None, "model": None},
     }
     config_path = test_data_dir.parent / "ov.conf"
     config_path.write_text(json.dumps(config), encoding="utf-8")
+    config_path.chmod(0o600)
     monkeypatch.setenv(OPENVIKING_CONFIG_ENV, str(config_path))
     for env_name in (
         "OPENAI_API_KEY",
@@ -282,13 +337,43 @@ async def root_openviking_config(
             super().__init__(model_name="root-fixture-embedder", config={"provider": "test"})
 
         def embed(self, content, is_query: bool = False) -> EmbedResult:
-            return EmbedResult(dense_vector=[0.0, 0.0, 0.0])
+            return EmbedResult(dense_vector=[0.0, 0.0, 0.0, 0.0])
 
         def get_dimension(self) -> int:
-            return 3
+            return 4
+
+    class RootFixtureVLM:
+        """Offline VLM double used by background compressors and query planning."""
+
+        model = "root-fixture-vlm"
+
+        async def get_completion_async(self, prompt: str = "", **_kwargs) -> str:
+            if "context query planner" in prompt.lower():
+                return '{"queries": [], "reasoning": "offline test fixture"}'
+            if "extract user-private configuration items" in prompt.lower():
+                return '{"values": {"api_key": "secret-xyz", "base_url": "https://example.com"}}'
+            return "# Root fixture summary"
+
+        def get_completion(self, prompt: str = "", **_kwargs) -> str:
+            if "context query planner" in prompt.lower():
+                return '{"queries": [], "reasoning": "offline test fixture"}'
+            if "extract user-private configuration items" in prompt.lower():
+                return '{"values": {"api_key": "secret-xyz", "base_url": "https://example.com"}}'
+            return "# Root fixture summary"
+
+        async def get_vision_completion_async(self, *_args, **_kwargs) -> str:
+            return "Root fixture image summary"
+
+        def get_vision_completion(self, *_args, **_kwargs) -> str:
+            return "Root fixture image summary"
+
+    offline_vlm = RootFixtureVLM()
 
     async def _fake_completion(*_args, **_kwargs) -> str:
-        return "# Root fixture summary"
+        prompt = str(_args[1] if len(_args) > 1 else _kwargs.get("prompt", ""))
+        forwarded_kwargs = dict(_kwargs)
+        forwarded_kwargs.pop("prompt", None)
+        return await offline_vlm.get_completion_async(prompt, **forwarded_kwargs)
 
     async def _fake_vision_completion(*_args, **_kwargs) -> str:
         return "Root fixture image summary"
@@ -297,6 +382,7 @@ async def root_openviking_config(
     monkeypatch.setattr(VLMConfig, "is_available", lambda _self: True)
     monkeypatch.setattr(VLMConfig, "get_completion_async", _fake_completion)
     monkeypatch.setattr(VLMConfig, "get_vision_completion_async", _fake_vision_completion)
+    monkeypatch.setattr(VLMConfig, "get_vlm_instance", lambda _self: offline_vlm)
 
     try:
         OpenVikingConfigSingleton.initialize(config_dict=config)

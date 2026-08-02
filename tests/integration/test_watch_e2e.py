@@ -26,8 +26,8 @@ async def get_watch_task(client: AsyncOpenViking, to_uri: str):
 
 
 @pytest_asyncio.fixture(scope="function")
-async def e2e_client(test_data_dir: Path):
-    """End-to-end test client with watch support."""
+async def e2e_client(test_data_dir: Path, root_openviking_config):
+    """End-to-end test client with deterministic offline embedding support."""
     await AsyncOpenViking.reset()
 
     shutil.rmtree(test_data_dir, ignore_errors=True)
@@ -78,6 +78,7 @@ class TestWatchE2EBasicFlow:
             reason="E2E watch test",
             instruction="Monitor for changes",
             watch_interval=60.0,
+            wait=True,
         )
 
         assert result is not None
@@ -103,12 +104,14 @@ class TestWatchE2EBasicFlow:
             path=str(watch_test_file),
             to=watched_uri,
             watch_interval=30.0,
+            wait=True,
         )
 
         await client.add_resource(
             path=str(watch_test_file),
             to=unwatched_uri,
             watch_interval=0,
+            wait=True,
         )
 
         watched_task = await get_watch_task(client, watched_uri)
@@ -130,6 +133,7 @@ class TestWatchE2EBasicFlow:
             path=str(watch_test_file),
             to=to_uri,
             watch_interval=30.0,
+            wait=True,
         )
 
         task = await get_watch_task(client, to_uri)
@@ -141,12 +145,14 @@ class TestWatchE2EBasicFlow:
             path=str(watch_test_file),
             to=to_uri,
             watch_interval=0,
+            wait=True,
         )
 
         await client.add_resource(
             path=str(watch_test_file),
             to=to_uri,
             watch_interval=120.0,
+            wait=True,
         )
 
         task = await get_watch_task(client, to_uri)
@@ -166,6 +172,7 @@ class TestWatchE2EBasicFlow:
             path=str(watch_test_file),
             to=to_uri,
             watch_interval=30.0,
+            wait=True,
         )
 
         task = await get_watch_task(client, to_uri)
@@ -176,6 +183,7 @@ class TestWatchE2EBasicFlow:
             path=str(watch_test_file),
             to=to_uri,
             watch_interval=0,
+            wait=True,
         )
 
         task = await get_watch_task(client, to_uri)
@@ -199,6 +207,7 @@ class TestWatchE2EConflictDetection:
             path=str(watch_test_file),
             to=to_uri,
             watch_interval=30.0,
+            wait=True,
         )
 
         with pytest.raises(ConflictError) as exc_info:
@@ -206,6 +215,7 @@ class TestWatchE2EConflictDetection:
                 path=str(watch_test_file),
                 to=to_uri,
                 watch_interval=60.0,
+                wait=True,
             )
 
         assert "already being monitored" in str(exc_info.value)
@@ -225,6 +235,7 @@ class TestWatchE2EConflictDetection:
             to=to_uri,
             reason="Initial reason",
             watch_interval=30.0,
+            wait=True,
         )
 
         task = await get_watch_task(client, to_uri)
@@ -235,6 +246,7 @@ class TestWatchE2EConflictDetection:
             path=str(watch_test_file),
             to=to_uri,
             watch_interval=0,
+            wait=True,
         )
 
         task = await get_watch_task(client, to_uri)
@@ -246,6 +258,7 @@ class TestWatchE2EConflictDetection:
             to=to_uri,
             reason="Reactivated reason",
             watch_interval=45.0,
+            wait=True,
         )
 
         task = await get_watch_task(client, to_uri)
@@ -281,6 +294,7 @@ class TestWatchE2EMultipleResources:
                 path=str(watch_test_file),
                 to=uri,
                 watch_interval=interval,
+                wait=True,
             )
 
         for uri, expected_interval in zip(uris, intervals, strict=True):
@@ -294,6 +308,7 @@ class TestWatchE2EMultipleResources:
                 path=str(watch_test_file),
                 to=uri,
                 watch_interval=0,
+                wait=True,
             )
 
         for uri in uris:
@@ -315,12 +330,14 @@ class TestWatchE2EMultipleResources:
             path=str(watch_test_file),
             to=uri1,
             watch_interval=30.0,
+            wait=True,
         )
 
         await client.add_resource(
             path=str(watch_test_file),
             to=uri2,
             watch_interval=60.0,
+            wait=True,
         )
 
         task1 = await get_watch_task(client, uri1)
@@ -333,6 +350,7 @@ class TestWatchE2EMultipleResources:
             path=str(watch_test_file),
             to=uri1,
             watch_interval=0,
+            wait=True,
         )
 
         task1_after = await get_watch_task(client, uri1)
@@ -376,6 +394,7 @@ class TestWatchE2EErrorHandling:
             ctx=ctx,
             to="viking://resources/no_watch_test",
             watch_interval=30.0,
+            wait=True,
         )
 
         assert result is not None

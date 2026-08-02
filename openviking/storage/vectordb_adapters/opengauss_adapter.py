@@ -1083,6 +1083,44 @@ class OpenGaussCollection(ICollection):
             ids.append(record_id)
         return ids
 
+    def update_data(self, data_list: List[Dict[str, Any]]):
+        """Apply partial updates to existing rows without replacing omitted fields."""
+        if not data_list:
+            return []
+
+        updated_ids = []
+        for record in data_list:
+            record_id = record.get("id")
+            if record_id is None or record_id == "":
+                raise ValueError("openGauss vector record requires id for update")
+            self._ensure_columns_for_record(record)
+
+            assignments = []
+            values = []
+            for column, value in record.items():
+                if column == "id":
+                    continue
+                assignments.append(
+                    f"{_quote_ident(column)} = "
+                    f"{'%s::vector' if column == self._dense_vector_name else '%s'}"
+                )
+                if column == self._dense_vector_name:
+                    values.append(_vector_literal(value))
+                elif column == self._sparse_vector_name:
+                    values.append(_json_dumps(value or {}))
+                elif column == "scope_roots":
+                    values.append(_encode_scope_roots(value))
+                else:
+                    values.append(_coerce_sql_value(value, self._field_types.get(column)))
+
+            if assignments:
+                self._execute(
+                    f"UPDATE {self._table_ref()} SET {', '.join(assignments)} WHERE id = %s",
+                    values + [str(record_id)],
+                )
+            updated_ids.append(record_id)
+        return updated_ids
+
     def _upsert_row(self, columns: List[str], values: List[Any]) -> None:
         id_index = columns.index("id")
         update_columns = [column for column in columns if column != "id"]

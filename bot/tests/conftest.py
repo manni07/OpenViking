@@ -4,12 +4,23 @@
 """Global test fixtures"""
 
 import asyncio
+import os
 import shutil
+import tempfile
 from pathlib import Path
 from typing import AsyncGenerator, Generator
 
 import pytest
 import pytest_asyncio
+
+# The bot harness is an independent suite, but it imports the shared SDK. Keep
+# that import/runtime path from resolving a developer's personal ovcli.conf;
+# tests that need a real profile still provide one explicitly.
+_TEST_CONFIG_TMP = tempfile.TemporaryDirectory(prefix="openviking-bot-config-")
+_TEST_CLI_CONFIG_PATH = Path(_TEST_CONFIG_TMP.name) / "ovcli.conf"
+_TEST_CLI_CONFIG_PATH.write_text("{}\n", encoding="utf-8")
+_TEST_CLI_CONFIG_PATH.chmod(0o600)
+os.environ["OPENVIKING_CLI_CONFIG_FILE"] = str(_TEST_CLI_CONFIG_PATH)
 
 from openviking import AsyncOpenViking
 

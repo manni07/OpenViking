@@ -219,6 +219,7 @@ exclude = ["tests*", "docs*", "examples*"]
 
 [tool.setuptools.package-data]
 openviking = [
+    "console/static/**/*",
     "prompts/templates/**/*.yaml",
     "server/static/**/*",
     "web_studio/dist/**/*",
@@ -230,6 +231,7 @@ openviking = [
     "storage/vectordb/engine/*.pyd",
 ]
 vikingbot = [
+    "console/static/**/*",
     "**/*.mjs",
     "skills/**/*.md",
     "skills/**/*.sh",
@@ -254,8 +256,12 @@ python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 asyncio_mode = "auto"
+pythonpath = ["."]
 markers = [
     "integration: tests that require external services or real model configuration",
+    "cli_remote: tests that require a remote OpenViking CLI binary and server connection",
+    "qdrant: tests that require a reachable Qdrant instance",
+    "bot: tests executed by the standalone vikingbot harness",
 ]
 addopts = "-v --cov=openviking --cov-report=term-missing"
 

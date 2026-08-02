@@ -119,7 +119,8 @@ class _FakeLockManager:
         del handle_id
         return None
 
-    async def acquire_exact_path_batch(self, handle, paths):
+    async def acquire_exact_path_batch(self, handle, paths, timeout=None):
+        del timeout
         self.acquired_batches.append(paths)
         handle.locks.extend(paths)
         return True
@@ -139,8 +140,8 @@ class _FakeVikingFS:
         del ctx
         return f"/fake/{uri.replace('://', '/').strip('/')}"
 
-    async def write_file(self, uri, content, ctx=None):
-        del ctx
+    async def write_file(self, uri, content, ctx=None, lock_handle=None):
+        del ctx, lock_handle
         self.writes.append((uri, content))
 
 

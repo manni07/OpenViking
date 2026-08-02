@@ -4,6 +4,7 @@
 import asyncio
 import logging
 import os
+from contextlib import asynccontextmanager
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -74,6 +75,7 @@ async def test_manual_memory_batching_100_files(monkeypatch):
     mock_config = MagicMock()
     mock_config.vlm = mock_vlm
     mock_config.language_fallback = "zh-CN"
+    mock_config.output_language_override = ""
     mock_config.semantic.max_file_content_chars = 30000
     mock_config.semantic.max_skeleton_chars = 5000
     mock_config.semantic.max_overview_prompt_chars = 60000
@@ -98,20 +100,26 @@ async def test_manual_memory_batching_100_files(monkeypatch):
                     }
                 )
 
-        async def ls(self, uri, ctx=None):
+        async def ls(self, uri, node_limit=None, ctx=None):
+            del node_limit
             return self.files
 
         async def read_file(self, uri, ctx=None):
             # 模拟读取 1000 字的流水账（由 LLM 构造）
             return await mock_vlm.get_completion_async(f"Generate diary for {uri}")
 
-        async def write_file(self, uri, content, ctx=None):
+        async def write_file(self, uri, content, ctx=None, lock_handle=None):
+            del lock_handle
             return True
 
         def _uri_to_path(self, uri, ctx=None):
             return uri.replace("viking://", "/")
 
     mock_fs = MockVikingFS()
+
+    @asynccontextmanager
+    async def unlocked_lock_context(*_args, **_kwargs):
+        yield None
 
     # 3. 模拟 Tracker 和 WaitTracker
     mock_wait_tracker = MagicMock()
@@ -129,11 +137,13 @@ async def test_manual_memory_batching_100_files(monkeypatch):
             "openviking.storage.queuefs.semantic_processor.get_request_wait_tracker",
             return_value=mock_wait_tracker,
         ),
-        patch(
-            "openviking.storage.queuefs.embedding_tracker.EmbeddingTaskTracker.get_instance",
-            return_value=mock_embedding_tracker,
-        ),
-    ):
+                patch(
+                    "openviking.storage.queuefs.embedding_tracker.EmbeddingTaskTracker.get_instance",
+                    return_value=mock_embedding_tracker,
+                ),
+                patch("openviking.storage.transaction.get_lock_manager", return_value=None),
+                patch("openviking.storage.transaction.LockContext", unlocked_lock_context),
+            ):
         # 4. 初始化 Processor 并设置并发
         processor = SemanticProcessor(max_concurrent_llm=10)
 

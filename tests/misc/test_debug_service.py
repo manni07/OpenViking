@@ -311,20 +311,33 @@ class TestObserverService:
         assert "models has errors" in non_transaction_errors
 
     @patch("openviking.service.debug_service.get_lock_manager")
+    @patch("openviking.service.debug_service.RetrievalObserver")
+    @patch("openviking.service.debug_service.LockObserver")
     @patch("openviking.service.debug_service.get_queue_manager")
     @patch("openviking.service.debug_service.QueueObserver")
     @patch("openviking.service.debug_service.VikingDBObserver")
     @patch("openviking.service.debug_service.ModelsObserver")
+    @patch("openviking.service.debug_service.FilesystemObserver")
     def test_is_healthy_returns_true(
         self,
+        mock_filesystem_cls,
         mock_models_cls,
         mock_vikingdb_cls,
         mock_queue_cls,
         mock_get_queue_mgr,
+        mock_lock_cls,
+        mock_retrieval_cls,
         mock_get_lock_mgr,
     ):
         """Test is_healthy returns True when system is healthy."""
-        for mock_cls in [mock_queue_cls, mock_vikingdb_cls, mock_models_cls]:
+        for mock_cls in [
+            mock_queue_cls,
+            mock_vikingdb_cls,
+            mock_models_cls,
+            mock_filesystem_cls,
+            mock_lock_cls,
+            mock_retrieval_cls,
+        ]:
             mock_observer = MagicMock()
             mock_observer.is_healthy.return_value = True
             mock_observer.has_errors.return_value = False

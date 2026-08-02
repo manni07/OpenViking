@@ -56,7 +56,9 @@ class TestClientInitialization:
         finally:
             await AsyncOpenViking.reset()
 
-    async def test_agent_id_alias_tags_assistant_messages_only(self, test_data_dir: Path):
+    async def test_agent_id_alias_tags_assistant_messages_only(
+        self, test_data_dir: Path, root_openviking_config
+    ):
         await AsyncOpenViking.reset()
 
         client = AsyncOpenViking(path=str(test_data_dir), agent_id="legacy-agent")
@@ -79,6 +81,11 @@ class TestClientInitialization:
                 "assistant",
                 content="again",
                 peer_id="explicit-peer",
+            )
+            session = await client._client._service.sessions.get(
+                "legacy-session",
+                client._client._ctx,
+                auto_create=False,
             )
             assert session.messages[-1].peer_id == "explicit-peer"
         finally:

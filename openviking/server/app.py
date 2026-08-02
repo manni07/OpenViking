@@ -289,7 +289,7 @@ def create_app(
         # Start MCP session manager (must be active before /mcp requests)
         from openviking.server.mcp_endpoint import mcp_lifespan
 
-        async with mcp_lifespan():
+        async with mcp_lifespan(getattr(app.state, "mcp_session_manager", None)):
             if service is not None:
                 await _initialize_runtime_state(app, service, config)
             yield
@@ -725,8 +725,10 @@ def create_app(
                 child_scope["route"] = self
             return match, child_scope
 
+    _mcp_app = create_mcp_app()
+    app.state.mcp_session_manager = getattr(_mcp_app, "_openviking_session_manager", None)
     app.routes.append(
-        _ScopedRoute("/mcp", endpoint=create_mcp_app(), methods=["GET", "POST", "DELETE"])
+        _ScopedRoute("/mcp", endpoint=_mcp_app, methods=["GET", "POST", "DELETE"])
     )
 
     return app

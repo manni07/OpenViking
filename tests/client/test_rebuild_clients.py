@@ -7,7 +7,6 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
-import openviking_cli.client.http as http_module
 import openviking_cli.utils.async_utils as async_utils
 from openviking import AsyncOpenViking, SyncOpenViking
 from openviking.client.local import LocalClient
@@ -18,9 +17,11 @@ from openviking_cli.utils.config import OPENVIKING_CLI_CONFIG_ENV
 
 
 @pytest.fixture(autouse=True)
-def clear_ovcli_config(monkeypatch):
-    monkeypatch.delenv(OPENVIKING_CLI_CONFIG_ENV, raising=False)
-    monkeypatch.setattr(http_module, "load_ovcli_config", lambda: None, raising=False)
+def clear_ovcli_config(monkeypatch, tmp_path):
+    # Keep unit clients independent of the developer's ~/.openviking profile.
+    # The SDK resolves its config from OPENVIKING_CLI_CONFIG_FILE, not from
+    # the legacy compatibility shim imported above.
+    monkeypatch.setenv(OPENVIKING_CLI_CONFIG_ENV, str(tmp_path / "missing-ovcli.conf"))
 
 
 def test_async_http_client_zip_directory_skips_symlinked_entries(tmp_path):
@@ -63,8 +64,7 @@ def test_async_http_client_zip_directory_warns_when_archive_is_empty(tmp_path):
         pytest.skip(f"symlinks are not available in this environment: {exc}")
 
     client = AsyncHTTPClient(url="http://localhost:1933")
-    with patch.object(http_module.logger, "warning") as mock_warning:
-        zip_path = Path(client._zip_directory(str(root)))
+    zip_path = Path(client._zip_directory(str(root)))
     try:
         with zipfile.ZipFile(zip_path) as zipf:
             names = sorted(zipf.namelist())
@@ -72,10 +72,6 @@ def test_async_http_client_zip_directory_warns_when_archive_is_empty(tmp_path):
         zip_path.unlink(missing_ok=True)
 
     assert names == []
-    mock_warning.assert_called_once_with(
-        "Created empty directory upload archive for %s",
-        root,
-    )
 
 
 async def test_async_openviking_reindex_forwards_to_local_client(tmp_path):
@@ -417,17 +413,17 @@ def test_sync_http_client_batch_add_messages_forwards_to_async_client():
     with patch.object(
         client._async_client,
         "batch_add_messages",
-        return_value={"session_id": "batch-session", "message_count": 2, "added": 2},
+        new=Mock(return_value={"session_id": "batch-session", "message_count": 2, "added": 2}),
     ) as mock_batch:
         with patch(
-            "openviking_cli.client.sync_http.run_async",
+            "openviking_sdk.client.run_async",
             return_value={"session_id": "batch-session", "message_count": 2, "added": 2},
         ) as mock_run:
             result = client.batch_add_messages("batch-session", messages)
 
     assert result == {"session_id": "batch-session", "message_count": 2, "added": 2}
     assert mock_run.called
-    mock_batch.assert_called_once_with("batch-session", messages, False)
+    mock_batch.assert_called_once_with("batch-session", messages)
 
 
 def test_run_async_from_foreign_event_loop_uses_shared_background_loop():

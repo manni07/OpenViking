@@ -23,6 +23,7 @@ import pytest_asyncio
 import uvicorn
 
 from openviking import AsyncOpenViking
+from openviking.models.embedder.base import DenseEmbedderBase, EmbedResult
 from openviking.server.app import create_app
 from openviking.server.config import ServerConfig
 from openviking.service.core import OpenVikingService
@@ -202,15 +203,21 @@ async def gemini_ov_client(tmp_path):
 
 
 @pytest.fixture(scope="session")
-def temp_dir():
-    """Create temp directory for the whole test session."""
-    shutil.rmtree(TEST_TMP_DIR, ignore_errors=True)
-    TEST_TMP_DIR.mkdir(parents=True, exist_ok=True)
-    yield TEST_TMP_DIR
+def server_temp_dir(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """Own the long-lived workspace used only by the in-process HTTP server."""
+    return tmp_path_factory.mktemp("openviking_integration_server")
+
+
+@pytest.fixture(scope="function")
+def temp_dir(tmp_path: Path) -> Path:
+    """Provide per-test storage for integration files and embedded clients."""
+    path = tmp_path / "integration"
+    path.mkdir()
+    return path
 
 
 @pytest.fixture(scope="session")
-def server_url(temp_dir):
+def server_url(server_temp_dir):
     """Start a real uvicorn server in a background thread.
 
     Returns the base URL (e.g. ``http://127.0.0.1:<port>``).
@@ -218,39 +225,125 @@ def server_url(temp_dir):
     """
     import asyncio
 
-    loop = asyncio.new_event_loop()
+    class OfflineEmbedder(DenseEmbedderBase):
+        def __init__(self, dimension: int = 4):
+            super().__init__(model_name="integration-fixture-embedder", config={"provider": "test"})
+            self._dimension = dimension
 
-    svc = OpenVikingService(
-        path=str(temp_dir / "data"), user=UserIdentifier.the_default_user("test_user")
+        def embed(self, text: str, is_query: bool = False) -> EmbedResult:
+            return EmbedResult(dense_vector=[0.0] * self._dimension)
+
+        def get_dimension(self) -> int:
+            return self._dimension
+
+    class OfflineVLM:
+        model = "integration-fixture-vlm"
+
+        async def get_completion_async(self, prompt: str = "", **_kwargs) -> str:
+            if "context query planner" in prompt.lower():
+                return '{"queries": [], "reasoning": "offline integration fixture"}'
+            return "# Integration fixture summary"
+
+        def get_completion(self, prompt: str = "", **_kwargs) -> str:
+            if "context query planner" in prompt.lower():
+                return '{"queries": [], "reasoning": "offline integration fixture"}'
+            return "# Integration fixture summary"
+
+        async def get_vision_completion_async(self, *_args, **_kwargs) -> str:
+            return "Integration fixture image summary"
+
+        def get_vision_completion(self, *_args, **_kwargs) -> str:
+            return "Integration fixture image summary"
+
+    offline_vlm = OfflineVLM()
+    OpenVikingConfigSingleton.reset_instance()
+    OpenVikingConfigSingleton.initialize(
+        config_dict={
+            "default_account": "integration-fixture",
+            "default_user": "integration-fixture",
+            "storage": {
+                "workspace": str(server_temp_dir / "data"),
+                "agfs": {"backend": "local"},
+                "vectordb": {"name": "test", "backend": "local", "project": "default"},
+            },
+            "embedding": {
+                "dense": {
+                    "provider": "litellm",
+                    "model": "integration-fixture",
+                    "dimension": 4,
+                }
+            },
+            "vlm": {"provider": None, "model": None},
+        }
     )
-    loop.run_until_complete(svc.initialize())
+    fixture_config = OpenVikingConfigSingleton.get_instance()
+    # Bind doubles to this fixture's config instances only.  A session-scoped
+    # class monkeypatch would leak into unrelated provider-factory tests.
+    object.__setattr__(fixture_config.embedding, "get_embedder", lambda: OfflineEmbedder())
+    object.__setattr__(fixture_config.vlm, "is_available", lambda: True)
+    object.__setattr__(
+        fixture_config.vlm,
+        "get_completion_async",
+        lambda prompt="", **kwargs: offline_vlm.get_completion_async(prompt, **kwargs),
+    )
+    object.__setattr__(
+        fixture_config.vlm,
+        "get_vision_completion_async",
+        lambda prompt, images, **kwargs: offline_vlm.get_vision_completion_async(
+            prompt, images, **kwargs
+        ),
+    )
+    object.__setattr__(fixture_config.vlm, "get_vlm_instance", lambda: offline_vlm)
 
-    config = ServerConfig()
-    fastapi_app = create_app(config=config, service=svc)
+    loop = asyncio.new_event_loop()
+    svc = None
+    server = None
+    thread = None
+    try:
+        svc = OpenVikingService(
+            path=str(server_temp_dir / "data"), user=UserIdentifier.the_default_user("test_user")
+        )
+        loop.run_until_complete(svc.initialize())
+        svc.viking_fs.query_embedder = OfflineEmbedder()
 
-    # Find a free port
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.bind(("127.0.0.1", 0))
-        port = s.getsockname()[1]
+        config = ServerConfig()
+        fastapi_app = create_app(config=config, service=svc)
 
-    uvi_config = uvicorn.Config(fastapi_app, host="127.0.0.1", port=port, log_level="warning")
-    server = uvicorn.Server(uvi_config)
-    thread = threading.Thread(target=server.run, daemon=True)
-    thread.start()
+        # Find a free port
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.bind(("127.0.0.1", 0))
+            port = s.getsockname()[1]
 
-    # Wait for server ready
-    url = f"http://127.0.0.1:{port}"
-    for _ in range(50):
-        try:
-            r = httpx.get(f"{url}/health", timeout=1)
-            if r.status_code == 200:
-                break
-        except Exception:
-            time.sleep(0.1)
+        uvi_config = uvicorn.Config(fastapi_app, host="127.0.0.1", port=port, log_level="warning")
+        server = uvicorn.Server(uvi_config)
+        thread = threading.Thread(target=server.run, daemon=True)
+        thread.start()
 
-    yield url
+        # Wait for server ready
+        url = f"http://127.0.0.1:{port}"
+        for _ in range(50):
+            try:
+                r = httpx.get(f"{url}/health", timeout=1)
+                if r.status_code == 200:
+                    break
+            except Exception:
+                time.sleep(0.1)
 
-    server.should_exit = True
-    thread.join(timeout=5)
-    loop.run_until_complete(svc.close())
-    loop.close()
+        yield url
+    finally:
+        if server is not None:
+            server.should_exit = True
+        if thread is not None:
+            thread.join(timeout=5)
+        if svc is not None:
+            loop.run_until_complete(svc.close())
+        loop.close()
+        for config_object, attribute in (
+            (fixture_config.embedding, "get_embedder"),
+            (fixture_config.vlm, "is_available"),
+            (fixture_config.vlm, "get_completion_async"),
+            (fixture_config.vlm, "get_vision_completion_async"),
+            (fixture_config.vlm, "get_vlm_instance"),
+        ):
+            object.__delattr__(config_object, attribute)
+        OpenVikingConfigSingleton.reset_instance()
