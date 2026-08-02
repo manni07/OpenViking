@@ -7,15 +7,18 @@
 | Q2 | Root-/Bot-Ownership | Root strict collection + separater Bot-Run | PASS |
 | Q3 | Offline-Legacy-Suite | Root `6129/232`, Legacy `268/3`, Storage `395/2` | PASS |
 | Q4 | Native `ragfs-python` | Import, Smoke `5`, Lifecycle `2` | PASS |
-| Q5 | OpenClaw P0/Service | Health/Handshake/aktuelle P0-Tests | HOLD / NOT RUN |
-| Q6 | Codex H1 Capability | exakter OAuth-Origin/Model/Threshold | HOLD / NOT RUN |
+| Q5 | OpenClaw P0/Service | Disposable CLI/Plugin `44/729`, Loopback-Gateway, MCP-Handshake; P0-Harness | PARTIAL PASS / P0 HOLD |
+| Q6 | Codex H1 Capability | exakter OAuth-Origin/Model/Threshold, Compaction-Emission und Replay | PASS |
 | Q7 | Codex H2 Benchmark | 20 reale + 10 synthetische Szenarien | HOLD / NOT RUN |
 | Q8 | Dokumentation und Fork-PR | Diff-/Testcheck, Commit/Push/Review | PASS / MERGED |
 
 Der lokale CI-Nachweis für Q8 ist PASS. Fork-PR #8 wurde als
 `373aa383511a62a8178208511c60b655ea406dfa` in `manni07/OpenViking:main`
-gemergt. Offen bleiben ausschließlich die absichtlich angehaltenen Live-Gates
-und der dokumentierte Upstream-Warning-Rest.
+gemergt. H1 wurde im privaten OAuth-Pilotlauf gegen den freigegebenen
+Codex-Origin als PASS nachgewiesen. Der disposable OpenClaw-Service und der
+echte read-only MCP-Handshake sind ebenfalls PASS. Offen bleiben der
+mutierende/stale OpenClaw-P0-Harness, H2, Provider-/Feishu-Live und der
+dokumentierte Upstream-Warning-Rest.
 
 ## Agent-Waves (logical team 10)
 

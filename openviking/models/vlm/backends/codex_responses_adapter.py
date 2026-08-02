@@ -210,6 +210,11 @@ def _freeze_items(items: List[Dict[str, Any]]) -> Tuple[Mapping[str, Any], ...]:
     return tuple(_deep_freeze(_to_json_value(item)) for item in items)
 
 
+def _prepare_replay_input_item(item: Dict[str, Any]) -> Dict[str, Any]:
+    """Drop response-only metadata while retaining the published opaque item."""
+    return {key: value for key, value in item.items() if key != "created_by"}
+
+
 def _latest_compaction_window(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     for index in range(len(items) - 1, -1, -1):
         if items[index].get("type") == "compaction":
@@ -439,7 +444,7 @@ def _build_final_response_from_stream_events(
     collected_text_deltas: List[str],
     has_function_calls: bool,
 ) -> Any:
-    output = getattr(completed_response, "output", None) if completed_response is not None else None
+    output = _item_get(completed_response, "output", None)
     if output:
         return completed_response
 
@@ -458,9 +463,8 @@ def _build_final_response_from_stream_events(
 
     return SimpleNamespace(
         output=fallback_output,
-        usage=getattr(completed_response, "usage", None)
-        if completed_response is not None
-        else None,
+        usage=_item_get(completed_response, "usage", None),
+        status=_item_get(completed_response, "status", None),
     )
 
 
@@ -479,6 +483,7 @@ class CodexCompletionsAdapter:
         clock: Optional[Callable[[], datetime]] = None,
         responses_compact_threshold: Optional[int] = None,
         responses_sdk_version: str = "unknown",
+        reasoning_effort: Optional[str] = "low",
     ):
         self._client_factory = client_factory
         self._async_client_factory = async_client_factory
@@ -493,6 +498,7 @@ class CodexCompletionsAdapter:
         self._clock = clock or (lambda: datetime.now(timezone.utc))
         self._responses_compact_threshold = responses_compact_threshold
         self._responses_sdk_version = str(responses_sdk_version)
+        self._reasoning_effort = str(reasoning_effort or "").strip() or None
         self._compaction_capability_stamp: Optional[str] = None
         self._request_lock = threading.Lock()
         self._in_flight = 0
@@ -836,7 +842,10 @@ class CodexCompletionsAdapter:
             raise _limit_error("image bytes", self._state_limits.max_image_bytes, image_bytes)
 
         tools = _convert_tools_for_responses(kwargs.get("tools"))
-        preflight_items = [*prior_items, *delta]
+        preflight_items = [
+            *[_prepare_replay_input_item(item) for item in prior_items],
+            *delta,
+        ]
         if len(preflight_items) > self._state_limits.max_items:
             raise _limit_error("item", self._state_limits.max_items, len(preflight_items))
         preflight_bytes = len(
@@ -861,6 +870,8 @@ class CodexCompletionsAdapter:
             "store": False,
             "stream": True,
         }
+        if self._reasoning_effort is not None:
+            request["reasoning"] = {"effort": self._reasoning_effort}
         if tools:
             request["tools"] = tools
             if kwargs.get("tool_choice") is not None:
@@ -1030,9 +1041,25 @@ class CodexCompletionsAdapter:
                     stream = client.responses.create(**request)
                     completed_response = None
                     completed_count = 0
+                    collected_output_items: List[Any] = []
+                    collected_text_deltas: List[str] = []
+                    has_function_calls = False
                     try:
                         for event in stream:
                             event_type = _item_get(event, "type", "")
+                            if event_type == "response.output_item.done":
+                                item = _item_get(event, "item")
+                                if item is not None:
+                                    collected_output_items.append(item)
+                                continue
+                            if "output_text.delta" in event_type:
+                                delta_text = _item_get(event, "delta", "")
+                                if delta_text:
+                                    collected_text_deltas.append(str(delta_text))
+                                continue
+                            if "function_call" in event_type:
+                                has_function_calls = True
+                                continue
                             if event_type == "response.completed":
                                 completed_count += 1
                                 if completed_count > 1:
@@ -1048,6 +1075,12 @@ class CodexCompletionsAdapter:
                     close = getattr(client, "close", None)
                     if callable(close):
                         close()
+                completed_response = _build_final_response_from_stream_events(
+                    completed_response,
+                    collected_output_items,
+                    collected_text_deltas,
+                    has_function_calls,
+                )
                 turn = self._commit_state(
                     state=state,
                     completed_response=completed_response,
@@ -1101,15 +1134,34 @@ class CodexCompletionsAdapter:
                 "stream": True,
                 "context_management": context_management,
             }
+            if self._reasoning_effort is not None:
+                request["reasoning"] = {"effort": self._reasoning_effort}
             try:
                 client = self._client_factory()
                 try:
                     stream = client.responses.create(**request)
                     completed_response = None
                     completed_count = 0
+                    collected_output_items: List[Any] = []
+                    collected_text_deltas: List[str] = []
+                    has_function_calls = False
                     try:
                         for event in stream:
-                            if _item_get(event, "type", "") != "response.completed":
+                            event_type = _item_get(event, "type", "")
+                            if event_type == "response.output_item.done":
+                                item = _item_get(event, "item")
+                                if item is not None:
+                                    collected_output_items.append(item)
+                                continue
+                            if "output_text.delta" in event_type:
+                                delta_text = _item_get(event, "delta", "")
+                                if delta_text:
+                                    collected_text_deltas.append(str(delta_text))
+                                continue
+                            if "function_call" in event_type:
+                                has_function_calls = True
+                                continue
+                            if event_type != "response.completed":
                                 continue
                             completed_count += 1
                             if completed_count > 1:
@@ -1129,6 +1181,12 @@ class CodexCompletionsAdapter:
                 raise
             except Exception:
                 raise CodexStateTransportError("Codex compaction probe transport failed.") from None
+            completed_response = _build_final_response_from_stream_events(
+                completed_response,
+                collected_output_items,
+                collected_text_deltas,
+                has_function_calls,
+            )
             if completed_response is None or _item_get(completed_response, "status") != "completed":
                 raise CodexCapabilityError("Codex compaction probe did not complete.")
             raw_output = _item_get(completed_response, "output", None)
@@ -1147,7 +1205,7 @@ class CodexCompletionsAdapter:
                 raise CodexCapabilityError("Codex endpoint did not emit a compaction item.")
             completed_output(
                 [
-                    *replay_window,
+                    *[_prepare_replay_input_item(item) for item in replay_window],
                     {"role": "user", "content": "Verify compaction replay."},
                 ]
             )
@@ -1243,8 +1301,24 @@ class CodexAsyncCompletionsAdapter:
                     stream = await client.responses.create(**request)
                     completed_response = None
                     completed_count = 0
+                    collected_output_items: List[Any] = []
+                    collected_text_deltas: List[str] = []
+                    has_function_calls = False
                     async for event in stream:
                         event_type = _item_get(event, "type", "")
+                        if event_type == "response.output_item.done":
+                            item = _item_get(event, "item")
+                            if item is not None:
+                                collected_output_items.append(item)
+                            continue
+                        if "output_text.delta" in event_type:
+                            delta_text = _item_get(event, "delta", "")
+                            if delta_text:
+                                collected_text_deltas.append(str(delta_text))
+                            continue
+                        if "function_call" in event_type:
+                            has_function_calls = True
+                            continue
                         if event_type == "response.completed":
                             completed_count += 1
                             if completed_count > 1:
@@ -1261,6 +1335,12 @@ class CodexAsyncCompletionsAdapter:
                     except (Exception, asyncio.CancelledError):
                         if not request_cancelled:
                             raise
+                completed_response = _build_final_response_from_stream_events(
+                    completed_response,
+                    collected_output_items,
+                    collected_text_deltas,
+                    has_function_calls,
+                )
                 turn = self._sync_adapter._commit_state(
                     state=state,
                     completed_response=completed_response,

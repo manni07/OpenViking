@@ -269,6 +269,7 @@ class CodexVLM(OpenAIVLM):
                 int(compact_threshold) if compact_threshold is not None else None
             ),
             responses_sdk_version=str(getattr(openai, "__version__", "unknown")),
+            reasoning_effort=self.reasoning_effort,
         )
         self._state_async_adapter = CodexAsyncCompletionsAdapter(self._state_adapter)
         return self._state_adapter, self._state_async_adapter

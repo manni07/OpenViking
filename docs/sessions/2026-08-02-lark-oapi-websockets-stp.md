@@ -2,7 +2,7 @@
 
 **Stand:** 2026-08-02
 **Worktree:** `/Volumes/ExtremePro/projects/OpenViking-agent-worktrees/20260801-open-items-completion`
-**Branch:** `agent-workflow/20260801-open-items-completion`
+**Branch:** `agent-workflow/20260802-live-gates-execution`
 **Remote:** `https://github.com/manni07/OpenViking.git`
 **Lokaler CI-Runner:** `/Volumes/ExtremePro/projects/local-ci-gate`
 
@@ -23,14 +23,17 @@ Der Fork-PR #8 ist verifiziert geschlossen: Merge-Commit
 
 ## Noch ausstehend
 
-- H1/H2, OpenClaw-P0/Service und Provider-/Feishu-Live bleiben bis zur
-  separat spezifizierten Freigabe `HOLD / NOT RUN`.
+- H1 ist PASS. Der disposable OpenClaw-Service und der echte read-only MCP-
+  Handshake sind PASS; der mutierende/stale OpenClaw-P0-Harness bleibt HOLD.
+- H2 und Provider-/Feishu-Live benötigen weiterhin den jeweils konkreten
+  Corpus bzw. Ziel-/Credential-/Kostenrahmen. Die fehlenden Felder sind im
+  Live-Gate-Plan als ausführbare nächste Schritte benannt.
 - Zwei Upstream-Lark-Warnungen bleiben sichtbar und ungefiltert; sie sind im
   Evidence-Ledger mit Provenienz und Exit-Kriterium erfasst.
 
 Der lokale Voll-Lauf ist abgeschlossen: `git-diff-check`,
 `lark-websockets-compatibility`, `collection-fixture-regressions`,
-`root-offline-suite` und `bot-standalone-suite` sind PASS. Root: `6165 passed,
+`root-offline-suite` und `bot-standalone-suite` sind PASS. Root: `6167 passed,
 246 skipped, 1` upstream Lark-Warnung; Bot: `271 passed, 2` upstream
 Lark-Warnungen. Der Word-Parser-Test-Helfer verwendet einen lokalen
 `asyncio`-Proxy, damit keine fremden `to_thread`-Aufrufe in die Testzählung
@@ -38,5 +41,5 @@ gelangen.
 
 ## Stop-Regeln
 
-Keine Live-Provider-/Feishu-Aufrufe, kein OpenClaw-P0, kein H1/H2 und kein
-Restart von Rechner, Server, Runtime, Container oder Service.
+Kein Provider-/Feishu-Aufruf, kein mutierender OpenClaw-P0-Lauf und kein
+Restart von Rechner, Server, Runtime, Container oder bestehendem Service.
