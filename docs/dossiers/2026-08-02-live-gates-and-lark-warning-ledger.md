@@ -3,6 +3,7 @@
 **Stand:** 2026-08-02
 **Workflow:** `$tccode` (`thorough`, `critical`) innerhalb Agent-Workflow-v4
 **Arbeitsstand:** `agent-workflow/20260802-live-gates-execution`
+**Evidence-Commit:** `986dd2cd2110b67bf02fbf35589a928d8a2e4035`
 **Fork:** `manni07/OpenViking`
 **Live-Status:** `H1 PASS`; OpenClaw-disposable-Service/MCP `PASS`; H2, OpenClaw-P0 und Provider-/Feishu-Live offen
 
