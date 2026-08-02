@@ -326,16 +326,9 @@ async def test_embedding_handler_open_breaker_logs_summary_instead_of_per_item_w
         lambda: (_ for _ in ()).throw(CircuitBreakerOpen("open")),
     )
 
-    import openviking.storage.collection_schemas as collection_schemas
-
-    collection_schemas.logger.addHandler(caplog.handler)
-    collection_schemas.logger.setLevel(logging.WARNING)
-    try:
-        with caplog.at_level(logging.WARNING):
-            await handler.on_dequeue(_build_queue_payload())
-            await handler.on_dequeue(_build_queue_payload())
-    finally:
-        collection_schemas.logger.removeHandler(caplog.handler)
+    with caplog.at_level(logging.WARNING):
+        await handler.on_dequeue(_build_queue_payload())
+        await handler.on_dequeue(_build_queue_payload())
 
     warnings = [record.message for record in caplog.records if record.levelno == logging.WARNING]
     assert warnings.count("Embedding circuit breaker is open; re-enqueueing messages") == 1

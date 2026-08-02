@@ -476,7 +476,7 @@ class TestCompressorV2:
         )
 
         with (
-            patch("openviking.storage.viking_fs.get_viking_fs", return_value=None),
+            patch("openviking.session.compressor_v2.get_viking_fs", return_value=None),
             patch("openviking.storage.transaction.init_lock_manager"),
             patch("openviking.storage.transaction.get_lock_manager", return_value=None),
             patch(
@@ -512,7 +512,7 @@ class TestCompressorV2:
         )
 
         with (
-            patch("openviking.storage.viking_fs.get_viking_fs", return_value=None),
+            patch("openviking.session.compressor_v2.get_viking_fs", return_value=None),
             patch("openviking.storage.transaction.init_lock_manager"),
             patch("openviking.storage.transaction.get_lock_manager", return_value=None),
             patch(
@@ -574,6 +574,11 @@ class TestCompressorV2:
                         write_uris=[],
                         edit_uris=[],
                         delete_ids=[],
+                        has_errors=lambda: False,
+                        upsert_operations=[],
+                        delete_file_contents=[],
+                        errors=[],
+                        resolved_links=[],
                     ),
                     [],
                 )
@@ -583,9 +588,14 @@ class TestCompressorV2:
             acquire_exact_tree_batch=AsyncMock(return_value=False),
             release=AsyncMock(),
         )
+        mock_viking_fs = MockVikingFS()
+        mock_viking_fs.agfs = object()
+        mock_viking_fs._uri_to_path = lambda uri, ctx=None: (
+            f"/local/default/{uri.removeprefix('viking://')}"
+        )
 
         with (
-            patch("openviking.session.compressor_v2.get_viking_fs", return_value=MockVikingFS()),
+            patch("openviking.session.compressor_v2.get_viking_fs", return_value=mock_viking_fs),
             patch("openviking.storage.transaction.init_lock_manager"),
             patch("openviking.storage.transaction.get_lock_manager", return_value=lock_manager),
             patch(
@@ -749,7 +759,7 @@ class TestCompressorV2:
 
         handle = SimpleNamespace(id="handle-1", locks=[])
 
-        async def acquire_exact_path_batch(_handle, paths):
+        async def acquire_exact_path_batch(_handle, paths, **_kwargs):
             events.append(f"exact:{paths[0]}")
             return True
 

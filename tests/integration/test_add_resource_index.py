@@ -1,5 +1,4 @@
 import json
-import os
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -33,11 +32,11 @@ def test_config(tmp_path):
 
 
 @pytest.fixture
-async def client(test_config, tmp_path):
+async def client(test_config, tmp_path, monkeypatch):
     """Initialize AsyncOpenViking client with mocks."""
 
     # Set config env var
-    os.environ[OPENVIKING_CONFIG_ENV] = str(test_config)
+    monkeypatch.setenv(OPENVIKING_CONFIG_ENV, str(test_config))
 
     # Reset Singletons
     OpenVikingConfigSingleton._instance = None
@@ -62,20 +61,18 @@ async def client(test_config, tmp_path):
 
         await client.close()
 
-        # Cleanup
+        # Cleanup the singleton; monkeypatch restores the caller's config env.
         OpenVikingConfigSingleton._instance = None
-        if OPENVIKING_CONFIG_ENV in os.environ:
-            del os.environ[OPENVIKING_CONFIG_ENV]
 
 
 @pytest.mark.asyncio
-async def test_add_resource_indexing_logic(test_config, tmp_path):
+async def test_add_resource_indexing_logic(test_config, tmp_path, monkeypatch):
     """
     Integration-like test for add_resource indexing logic.
     Uses Mock AGFS but tests the client logic.
     """
     # Set config env var
-    os.environ[OPENVIKING_CONFIG_ENV] = str(test_config)
+    monkeypatch.setenv(OPENVIKING_CONFIG_ENV, str(test_config))
     OpenVikingConfigSingleton._instance = None
     await AsyncOpenViking.reset()
 
@@ -155,5 +152,3 @@ async def test_add_resource_indexing_logic(test_config, tmp_path):
         finally:
             await client.close()
             OpenVikingConfigSingleton._instance = None
-            if OPENVIKING_CONFIG_ENV in os.environ:
-                del os.environ[OPENVIKING_CONFIG_ENV]

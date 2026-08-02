@@ -15,7 +15,7 @@ from openviking.resource.watch_storage import (
 from openviking.server.identity import RequestContext, Role
 from openviking.storage.content_write import ContentWriteCoordinator
 from openviking.storage.viking_fs import VikingFS
-from openviking_cli.exceptions import InvalidArgumentError
+from openviking_cli.exceptions import InvalidArgumentError, PermissionDeniedError
 from openviking_cli.session.user_id import UserIdentifier
 
 
@@ -48,7 +48,7 @@ def test_watch_task_control_files_are_root_only(bare_viking_fs, root_ctx, user_c
     assert bare_viking_fs._is_accessible(uri, root_ctx) is True
     assert bare_viking_fs._is_accessible(uri, user_ctx) is False
 
-    with pytest.raises(PermissionError):
+    with pytest.raises(PermissionDeniedError):
         bare_viking_fs._ensure_access(uri, user_ctx)
 
 
@@ -58,7 +58,9 @@ async def test_hidden_listing_filters_watch_task_control_files_for_non_root(
 ):
     bare_viking_fs._uri_to_path = lambda uri, ctx=None: "/fake/resources"
     bare_viking_fs._ctx_or_default = lambda ctx=None: ctx
-    bare_viking_fs._ls_entries = lambda path: [
+    async def _fake_ls_entries(path, **_kwargs):
+        del path
+        return [
         {
             "name": ".watch_tasks.json",
             "isDir": False,
@@ -78,7 +80,8 @@ async def test_hidden_listing_filters_watch_task_control_files_for_non_root(
             "modTime": "2026-01-01T00:00:00+00:00",
         },
         {"name": "public.txt", "isDir": False, "size": 5, "modTime": "2026-01-01T00:00:00+00:00"},
-    ]
+        ]
+    bare_viking_fs._ls_entries = _fake_ls_entries
     bare_viking_fs._path_to_uri = lambda path, ctx=None: f"viking://resources/{path.split('/')[-1]}"
 
     root_entries = await bare_viking_fs._ls_original(

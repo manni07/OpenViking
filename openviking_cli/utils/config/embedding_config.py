@@ -37,6 +37,11 @@ class EmbeddingModelConfig(BaseModel):
     api_key: Optional[str] = Field(default=None, description="API key")
     api_base: Optional[str] = Field(default=None, description="API base URL")
     dimension: Optional[int] = Field(default=None, description="Embedding dimension")
+    max_tokens: Optional[int] = Field(
+        default=None,
+        ge=1,
+        description="Optional provider token budget; embedders use 8000 when unset.",
+    )
     batch_size: int = Field(default=32, description="Batch size for embedding generation")
     input: str = Field(default="multimodal", description="Input type: 'text' or 'multimodal'")
     query_param: Optional[str] = Field(
@@ -317,7 +322,7 @@ class EmbeddingModelConfig(BaseModel):
             ]:
                 if value and value.upper() not in _GEMINI_TASK_TYPES:
                     raise ValueError(
-                        f"{label}: invalid {field_name} '{value}' for Gemini. "
+                        f"{label}: Invalid {field_name} '{value}' for Gemini. "
                         f"Valid task_types: {', '.join(sorted(_GEMINI_TASK_TYPES))}"
                     )
 
@@ -450,9 +455,7 @@ class EmbeddingModelConfig(BaseModel):
             return get_cohere_model_default_dimension(model)
 
         if provider == "gemini":
-            from openviking.models.embedder.gemini_embedders import GeminiDenseEmbedder
-
-            return GeminiDenseEmbedder._default_dimension(model)
+            return self._gemini_default_dimension(model)
 
         if provider == "local":
             from openviking.models.embedder.local_embedders import (
@@ -536,9 +539,7 @@ class EmbeddingModelConfig(BaseModel):
             return get_cohere_model_default_dimension(effective_model)
 
         if provider == "gemini":
-            from openviking.models.embedder.gemini_embedders import GeminiDenseEmbedder
-
-            return GeminiDenseEmbedder._default_dimension(effective_model)
+            return self._gemini_default_dimension(effective_model)
 
         if provider == "ollama":
             # Common Ollama embedding models and their dimensions
@@ -587,6 +588,21 @@ class EmbeddingModelConfig(BaseModel):
                 return 1024
 
         return 2048
+
+    @staticmethod
+    def _gemini_default_dimension(model: Optional[str]) -> int:
+        """Resolve Gemini dimensions without importing the optional SDK."""
+        known = {
+            "gemini-embedding-2-preview": 3072,
+            "gemini-embedding-001": 3072,
+            "text-embedding-004": 768,
+        }
+        model_name = model or ""
+        if model_name in known:
+            return known[model_name]
+        if model_name.startswith("text-embedding-"):
+            return 768
+        return 3072
 
 
 class EmbeddingCircuitBreakerConfig(BaseModel):
@@ -750,6 +766,7 @@ class EmbeddingConfig(BaseModel):
                     "api_base": cfg.api_base,
                     "api_version": cfg.api_version,
                     "dimension": cfg.dimension,
+                    "max_tokens": cfg.max_tokens,
                     "provider": "openai",
                     "configured_provider": "openai",
                     "config": dict(runtime_config),
@@ -772,6 +789,7 @@ class EmbeddingConfig(BaseModel):
                     "api_base": cfg.api_base,
                     "api_version": cfg.api_version,
                     "dimension": cfg.dimension,
+                    "max_tokens": cfg.max_tokens,
                     "provider": "azure",
                     "configured_provider": "azure",
                     "config": dict(runtime_config),
@@ -896,6 +914,7 @@ class EmbeddingConfig(BaseModel):
                     or "no-key",  # Ollama ignores the key, but client requires non-empty
                     "api_base": cfg.api_base or "http://localhost:11434/v1",
                     "dimension": cfg.dimension,
+                    "max_tokens": cfg.max_tokens,
                     "configured_provider": "ollama",
                     "config": dict(runtime_config),
                 },
@@ -1044,6 +1063,7 @@ class EmbeddingConfig(BaseModel):
             merged_config = EmbeddingModelConfig(
                 model=cred.model or config.model,
                 dimension=config.dimension,
+                max_tokens=config.max_tokens,
                 batch_size=config.batch_size,
                 input=config.input,
                 query_param=config.query_param,

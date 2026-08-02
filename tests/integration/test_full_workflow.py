@@ -14,7 +14,7 @@ from openviking.storage.transaction import release_all_locks
 
 
 @pytest_asyncio.fixture(scope="function")
-async def integration_client(test_data_dir: Path):
+async def integration_client(test_data_dir: Path, root_openviking_config):
     """Integration test client"""
     await AsyncOpenViking.reset()
 

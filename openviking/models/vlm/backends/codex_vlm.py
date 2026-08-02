@@ -39,9 +39,9 @@ except ImportError:
 
 from ..base import VLMResponse
 from .codex_auth import (
-    DEFAULT_CODEX_BASE_URL,
     resolve_codex_runtime_credentials,
     resolve_codex_runtime_credentials_async,
+    validate_codex_base_url,
 )
 from .codex_responses_adapter import (
     CodexAsyncChatShim,
@@ -61,8 +61,7 @@ class CodexVLM(OpenAIVLM):
     def __init__(self, config: Dict[str, Any]):
         normalized = dict(config)
         normalized["provider"] = "openai-codex"
-        if not normalized.get("api_base"):
-            normalized["api_base"] = DEFAULT_CODEX_BASE_URL
+        normalized["api_base"] = validate_codex_base_url(normalized.get("api_base"))
         super().__init__(normalized)
         self._async_client = None
         self._state_adapter = None
@@ -148,11 +147,11 @@ class CodexVLM(OpenAIVLM):
         explicit_api_base = str(self.config.get("api_base", "") or "").strip().rstrip("/")
         if explicit_api_key:
             self.api_key = explicit_api_key
-            self.api_base = explicit_api_base or DEFAULT_CODEX_BASE_URL
+            self.api_base = validate_codex_base_url(explicit_api_base)
             return self.api_key, self.api_base
         credentials = resolve_codex_runtime_credentials()
         self.api_key = credentials["api_key"]
-        self.api_base = explicit_api_base or credentials["base_url"]
+        self.api_base = validate_codex_base_url(explicit_api_base or credentials["base_url"])
         return self.api_key, self.api_base
 
     def _build_text_kwargs(self, *args, **kwargs):
@@ -341,7 +340,7 @@ class CodexVLM(OpenAIVLM):
         explicit_api_key = str(self.config.get("api_key", "") or "").strip()
         explicit_api_base = str(self.config.get("api_base", "") or "").strip().rstrip("/")
         if explicit_api_key:
-            base_url = explicit_api_base or DEFAULT_CODEX_BASE_URL
+            base_url = validate_codex_base_url(explicit_api_base)
             return (
                 explicit_api_key,
                 base_url,
@@ -360,7 +359,7 @@ class CodexVLM(OpenAIVLM):
         explicit_api_key = str(self.config.get("api_key", "") or "").strip()
         explicit_api_base = str(self.config.get("api_base", "") or "").strip().rstrip("/")
         if explicit_api_key:
-            base_url = explicit_api_base or DEFAULT_CODEX_BASE_URL
+            base_url = validate_codex_base_url(explicit_api_base)
             return (
                 explicit_api_key,
                 base_url,

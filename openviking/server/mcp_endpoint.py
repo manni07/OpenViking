@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import asyncio
 import contextvars
+import copy
 import os
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
@@ -1084,9 +1085,17 @@ _apply_portable_schemas()
 
 
 @asynccontextmanager
-async def mcp_lifespan():
-    """Run the MCP session manager. Call this inside the FastAPI lifespan."""
-    async with mcp.session_manager.run():
+async def mcp_lifespan(session_manager=None):
+    """Run one app-owned MCP session manager inside the FastAPI lifespan.
+
+    The MCP SDK deliberately makes a session manager single-use.  Keeping the
+    manager on the module-level ``FastMCP`` object therefore breaks a second
+    application lifespan in the same process (tests, embedded servers, and
+    controlled reloads).  ``create_mcp_app`` supplies the manager belonging to
+    the current FastAPI app; the global fallback is retained for old callers.
+    """
+    manager = session_manager or mcp.session_manager
+    async with manager.run():
         logger.info(
             "MCP endpoint ready (16 tools: find, search, recall, read, list, remember, "
             "add_resource, list_watches, cancel_watch, grep, glob, forget, code_outline, "
@@ -1101,6 +1110,15 @@ def create_mcp_app() -> ASGIApp:
     IMPORTANT: call `mcp_lifespan()` inside the FastAPI lifespan BEFORE
     serving requests. The session manager task group must be initialized.
     """
-    starlette_app = mcp.streamable_http_app()
+    # ``FastMCP.streamable_http_app`` caches its manager on the FastMCP
+    # instance, while the SDK manager is deliberately single-use.  A shallow
+    # copy preserves the registered tools and protocol server but gives every
+    # outer FastAPI app an independent manager, so app lifespans can overlap
+    # safely (for example an embedded server plus an in-process test app).
+    app_mcp = copy.copy(mcp)
+    app_mcp._session_manager = None
+    starlette_app = app_mcp.streamable_http_app()
     handler = starlette_app.routes[0].app
-    return _IdentityASGIMiddleware(handler)
+    identity_app = _IdentityASGIMiddleware(handler)
+    setattr(identity_app, "_openviking_session_manager", app_mcp.session_manager)
+    return identity_app

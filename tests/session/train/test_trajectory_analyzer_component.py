@@ -65,7 +65,8 @@ class FakeVikingFS:
     async def read_file(self, uri, ctx=None):
         return self.files[uri]
 
-    async def write_file(self, uri, content, ctx=None):
+    async def write_file(self, uri, content, ctx=None, lock_handle=None):
+        del lock_handle
         self.files[uri] = content
         self.writes.append((uri, content, ctx))
 

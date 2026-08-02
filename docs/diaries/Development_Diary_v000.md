@@ -19,6 +19,33 @@
 **Restarbeit.** Vor Merge die PR-Checks des sicheren Konfigurationsnachtrags abwarten; jede der 74 Baseline-Ausnahmen vor dem 2026-08-27 entfernen oder erneut explizit bewerten. Eine reale Bereitstellung verlangt einen konkret benannten Ziel-Host/-Cluster und dessen nicht-sekrete Konfigurationsreferenzen; lokal ist kein Docker-Daemon und kein Kubernetes-Kontext verfügbar. Kein Rechner- oder Serverneustart wurde ausgeführt oder ist für diese Arbeit angeordnet.
 
 **Betroffener Git-Kontext.** Basis `60ef45d4c3a7d07ceb1df4e9d7dde7a14449ac50`; Arbeitszweig `agent-workflow/20260727-security-hardening` im isolierten Worktree. Draft-PR #1 ist im Fork `manni07/OpenViking` eröffnet; Push/Merge erfolgen nur nach Status-, Diff- und Checkprüfung.
+
+## 2026-08-01 — Root-Fixture-Isolation
+
+**Auslöser.** Der Root-Testpfad lud bei Embedded-Clients zuerst die Host-
+`~/.openviking/ov.conf`; `StorageConfig` versuchte dadurch bereits vor dem
+`path`-Override `/app/.openviking/data` anzulegen. Zusätzlich löschte die
+function-scoped Fixture ein globales `test_data/tmp` und war nicht worker-sicher.
+
+**Umsetzung.** In einem frischen Fork-Worktree auf `22919c33` wurde der
+Workspace-Override vor `OpenVikingConfig.from_dict()` gelegt. Die Root-Fixtures
+erhalten eine sichere per-Test-`ov.conf`, einen Bootstrap-Pfad vor eager Imports,
+lokale Embedder-/VLM-Fakes, sichere Singleton-Resets und `tmp_path`-Isolation.
+Die Änderung bleibt auf Root-/Embedded-Tests begrenzt; OpenClaw-P0/Service,
+H1/H2, Provider-Live und native Builds wurden nicht gestartet.
+
+**Nachweis.** TDD-RED reproduzierte den `/app`-Fehler. Danach bestanden 40
+fokussierte Tests (11 Isolation plus 29 Config-Legacy-Fälle);
+die Boundary-Suite bestand mit 3 Tests und einer bekannten qdrant-Warnung. Die
+Root-Collection sammelte 6302 Tests, bleibt aber wegen des nicht installierten
+optionalen `vikingbot`-Subprojekts und 15 vorbestehender Warnungen FAIL/HOLD.
+Der Lifecycle-Test erreicht nun den `/app`-Fehler nicht mehr, bleibt aber wegen
+fehlendem `ragfs_python` HOLD.
+
+**Übergabe.** ARD, TRD, ID, PD, QWF, TD, STP, Manual, Open-Item-Bericht und
+Proposal liegen in den entsprechenden `docs/`-Ordnern. Ein gezielter Commit,
+Push und Draft-PR gegen `manni07/OpenViking` stehen noch aus; Merge und jede
+Live-Aktivierung sind ausdrücklich ausgeschlossen.
 ## Codex-Compaction und OpenViking Responses State
 
 Datum: 2026-07-31

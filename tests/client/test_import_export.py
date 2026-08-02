@@ -12,6 +12,7 @@ from pathlib import Path
 import pytest
 
 from openviking import AsyncOpenViking
+from openviking.storage.ovpack.format import OVPACK_FORMAT_VERSION
 from openviking.storage.transaction import release_all_locks
 
 
@@ -121,7 +122,7 @@ class TestImportOvpack:
         index_records = b""
         manifest = {
             "kind": "openviking.ovpack",
-            "format_version": 2,
+            "format_version": OVPACK_FORMAT_VERSION,
             "root": {
                 "name": "pkg",
                 "uri": "viking://resources/pkg",

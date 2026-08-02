@@ -9,7 +9,7 @@ Maintains the service-facing compressor interface.
 
 import asyncio
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Awaitable, Callable, Dict, List, Optional
 
 from openviking.core.context import Context
@@ -480,7 +480,7 @@ class SessionCompressorV2:
     def _empty_memory_diff(archive_uri: str = "") -> Dict[str, Any]:
         return {
             "archive_uri": archive_uri,
-            "extracted_at": datetime.utcnow().isoformat() + "Z",
+            "extracted_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
             "operations": {
                 "adds": [],
                 "updates": [],
@@ -1221,7 +1221,7 @@ class SessionCompressorV2:
         return {
             "archive_uri": archive_uri,
             "trace_id": tracer.get_trace_id() or None,
-            "extracted_at": datetime.utcnow().isoformat() + "Z",
+            "extracted_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
             "operations": {
                 "adds": adds,
                 "updates": updates,

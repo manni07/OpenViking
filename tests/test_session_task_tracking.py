@@ -19,12 +19,18 @@ from openviking.service.task_tracker import get_task_tracker, set_task_tracker
 
 
 @pytest_asyncio.fixture
-async def api_client(temp_dir) -> AsyncGenerator[Tuple[httpx.AsyncClient, OpenVikingService], None]:
+async def api_client(
+    temp_dir, offline_test_models
+) -> AsyncGenerator[Tuple[httpx.AsyncClient, OpenVikingService], None]:
+    del offline_test_models
     """Create in-process HTTP client for API endpoint tests."""
     set_task_tracker(None)
     service = OpenVikingService(path=str(temp_dir / "api_data"))
     await service.initialize()
     app = create_app(config=ServerConfig(), service=service)
+    from openviking.server.auth.plugins import DevAuthPlugin
+
+    app.state.auth_plugin = DevAuthPlugin()
     set_service(service)
 
     transport = httpx.ASGITransport(app=app)
@@ -216,10 +222,10 @@ async def test_task_failed_when_memory_extraction_raises(api_client):
     client, service = api_client
     session_id = await _new_session_with_message(client)
 
-    async def failing_extract(_context, _user, _session_id):
+    async def failing_extract(*_args, **_kwargs):
         raise RuntimeError("memory_extraction_failed: synthetic extractor error")
 
-    service.sessions._session_compressor.extractor.extract = failing_extract
+    service.sessions._session_compressor.extract_long_term_memories = failing_extract
 
     resp = await client.post(f"/api/v1/sessions/{session_id}/commit")
     task_id = resp.json()["result"]["task_id"]

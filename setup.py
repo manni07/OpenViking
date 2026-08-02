@@ -303,6 +303,8 @@ class OpenVikingBuildExt(build_ext):
                     "maturin",
                     "build",
                     "--release",
+                    "--features",
+                    "s3",
                     "--out",
                     tmpdir,
                 ]
@@ -549,9 +551,11 @@ setup(
             "bin/ov.exe",
             "server/static/**/*",
             "web_studio/dist/**/*",
+            "console/static/**/*",
             "storage/vectordb/engine/*.abi3.so",
             "storage/vectordb/engine/*.pyd",
         ],
+        "vikingbot": ["console/static/**/*"],
     },
     include_package_data=True,
 )

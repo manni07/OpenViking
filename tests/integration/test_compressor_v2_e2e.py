@@ -9,6 +9,7 @@ No need to worry about ov.conf - server uses its own config.
 """
 
 import asyncio
+import os
 from dataclasses import asdict
 from datetime import datetime
 
@@ -20,6 +21,14 @@ from openviking_cli.client.http import AsyncHTTPClient
 from openviking_cli.utils import get_logger
 
 logger = get_logger(__name__)
+
+pytestmark = [
+    pytest.mark.cli_remote,
+    pytest.mark.skipif(
+        os.environ.get("RUN_OPENVIKING_LIVE_TESTS") != "1",
+        reason="OpenViking live service tests require RUN_OPENVIKING_LIVE_TESTS=1",
+    ),
+]
 
 # Server URL - user starts openviking-server separately
 SERVER_URL = "http://127.0.0.1:1933"

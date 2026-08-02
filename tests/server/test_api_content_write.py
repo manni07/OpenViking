@@ -124,7 +124,8 @@ async def test_write_without_wait_is_immediately_readable(client_with_resource):
 @pytest.mark.asyncio
 async def test_write_missing_uri_validation(client):
     resp = await client.post("/api/v1/content/write", json={"content": "missing uri"})
-    assert resp.status_code == 422
+    assert resp.status_code == 400
+    assert resp.json()["error"]["code"] == "INVALID_ARGUMENT"
 
 
 @pytest.mark.asyncio
@@ -142,7 +143,8 @@ async def test_write_rejects_removed_semantic_flags(client_with_resource):
         },
     )
 
-    assert resp.status_code == 422
+    assert resp.status_code == 400
+    assert resp.json()["error"]["code"] == "INVALID_ARGUMENT"
 
 
 async def test_api_create_mode_new_file_success(client):

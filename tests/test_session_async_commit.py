@@ -19,12 +19,18 @@ from openviking.service.task_tracker import TaskStatus, get_task_tracker, set_ta
 
 
 @pytest_asyncio.fixture
-async def api_client(temp_dir) -> AsyncGenerator[Tuple[httpx.AsyncClient, OpenVikingService], None]:
+async def api_client(
+    temp_dir, offline_test_models
+) -> AsyncGenerator[Tuple[httpx.AsyncClient, OpenVikingService], None]:
+    del offline_test_models
     """Create in-process HTTP client for API endpoint tests."""
     set_task_tracker(None)
     service = OpenVikingService(path=str(temp_dir / "api_data"))
     await service.initialize()
     app = create_app(config=ServerConfig(), service=service)
+    from openviking.server.auth.plugins import DevAuthPlugin
+
+    app.state.auth_plugin = DevAuthPlugin()
     set_service(service)
 
     transport = httpx.ASGITransport(app=app)
@@ -37,7 +43,8 @@ async def api_client(temp_dir) -> AsyncGenerator[Tuple[httpx.AsyncClient, OpenVi
 
 
 @pytest_asyncio.fixture
-async def ov_client(temp_dir) -> AsyncGenerator[AsyncOpenViking, None]:
+async def ov_client(temp_dir, offline_test_models) -> AsyncGenerator[AsyncOpenViking, None]:
+    del offline_test_models
     """Create AsyncOpenViking client for unit tests."""
     set_task_tracker(None)
     client = AsyncOpenViking(path=str(temp_dir / "ov_data"))

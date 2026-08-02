@@ -581,19 +581,11 @@ async def test_add_resource_with_watch_interval_auto_binds_root_uri(
             "wait": True,
         },
     )
-    assert resp.status_code == 200
+    assert resp.status_code == 400
     body = resp.json()
-    assert body["status"] == "ok"
-    root_uri = body["result"]["root_uri"]
-    task = await service.watch_scheduler.watch_manager.get_task_by_uri(
-        to_uri=root_uri,
-        account_id="default",
-        user_id="test_user",
-        role="ROOT",
-    )
-    assert task is not None
-    assert task.to_uri == root_uri
-    assert task.watch_interval == 5.0
+    assert body["status"] == "error"
+    assert body["error"]["code"] == "INVALID_ARGUMENT"
+    assert "uploaded content" in body["error"]["message"]
 
 
 async def test_add_resource_with_default_watch_interval(
@@ -842,10 +834,6 @@ async def test_add_resource_non_wait_queue_task_queryable(
     sample_markdown_file,
     upload_temp_dir,
 ):
-    from openviking.service.task_tracker import set_task_tracker
-
-    set_task_tracker(None)
-
     resp = await client.post(
         "/api/v1/resources",
         json={
@@ -854,6 +842,8 @@ async def test_add_resource_non_wait_queue_task_queryable(
             "wait": False,
         },
     )
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "ok"
     task_id = resp.json()["result"]["task_id"]
 
     await asyncio.sleep(2.0)

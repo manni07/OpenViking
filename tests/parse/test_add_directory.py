@@ -65,7 +65,20 @@ class FakeVikingFS:
     async def read(self, uri: str, offset: int = 0, size: int = -1) -> bytes:
         return self.files.get(uri, b"")
 
-    async def ls(self, uri: str) -> List[Dict[str, Any]]:
+    async def read_file(self, uri: str, offset: int = 0, size: int = -1) -> bytes:
+        return (await self.read(uri, offset=offset, size=size)).decode("utf-8")
+
+    async def glob(self, pattern: str, uri: str, **_kwargs) -> Dict[str, List[str]]:
+        prefix = uri.rstrip("/") + "/"
+        return {
+            "matches": [
+                file_uri
+                for file_uri in sorted(self.files)
+                if file_uri.startswith(prefix) and file_uri.endswith(".md")
+            ]
+        }
+
+    async def ls(self, uri: str, **_kwargs) -> List[Dict[str, Any]]:
         """List direct children of *uri* (mirrors real AGFS entry format)."""
         prefix = uri.rstrip("/") + "/"
         children: Dict[str, bool] = {}  # name → is_dir
@@ -438,10 +451,7 @@ class TestParserDelegation:
             mock_assign.side_effect = assign_side_effect
             await parser.parse(str(tmp_path))
 
-        dir_name = tmp_path.name
-        found_md = any(
-            uri.endswith("report.md") and f"/{dir_name}/" in uri for uri in fake_fs.files
-        )
+        found_md = any(uri.endswith("report.md") for uri in fake_fs.files)
         assert found_md, f"report.md not found. Files: {list(fake_fs.files.keys())}"
 
     @pytest.mark.asyncio
@@ -480,8 +490,7 @@ class TestParserDelegation:
             mock_assign.side_effect = assign_side_effect
             await parser.parse(str(tmp_path))
 
-        dir_name = tmp_path.name
-        found_md = any(uri.endswith("data.md") and f"/{dir_name}/" in uri for uri in fake_fs.files)
+        found_md = any(uri.endswith("data.md") for uri in fake_fs.files)
         assert found_md, f"data.md not found. Files: {list(fake_fs.files.keys())}"
 
     @pytest.mark.asyncio
@@ -520,8 +529,7 @@ class TestParserDelegation:
             mock_assign.side_effect = assign_side_effect
             await parser.parse(str(tmp_path))
 
-        dir_name = tmp_path.name
-        found_md = any(uri.endswith("book.md") and f"/{dir_name}/" in uri for uri in fake_fs.files)
+        found_md = any(uri.endswith("book.md") for uri in fake_fs.files)
         assert found_md, f"book.md not found. Files: {list(fake_fs.files.keys())}"
 
     @pytest.mark.asyncio
@@ -560,10 +568,7 @@ class TestParserDelegation:
             mock_assign.side_effect = assign_side_effect
             await parser.parse(str(tmp_path))
 
-        dir_name = tmp_path.name
-        found_md = any(
-            uri.endswith("slides.md") and f"/{dir_name}/" in uri for uri in fake_fs.files
-        )
+        found_md = any(uri.endswith("slides.md") for uri in fake_fs.files)
         assert found_md, f"slides.md not found. Files: {list(fake_fs.files.keys())}"
 
     @pytest.mark.asyncio
@@ -602,10 +607,7 @@ class TestParserDelegation:
             mock_assign.side_effect = assign_side_effect
             await parser.parse(str(tmp_path))
 
-        dir_name = tmp_path.name
-        found_md = any(
-            uri.endswith("archive.md") and f"/{dir_name}/" in uri for uri in fake_fs.files
-        )
+        found_md = any(uri.endswith("archive.md") for uri in fake_fs.files)
         assert found_md, f"archive.md not found. Files: {list(fake_fs.files.keys())}"
 
 

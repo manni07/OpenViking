@@ -3404,8 +3404,15 @@ class VikingFS:
                     missing.append(item)
                 else:
                     timestamped.append((timestamp, item))
+            # Some backends expose only whole-second mtimes.  Keep ordering
+            # deterministic in that case instead of depending on directory
+            # enumeration order (which can vary across filesystems).
             timestamped.sort(
-                key=lambda pair: pair[0],
+                key=lambda pair: (
+                    pair[0],
+                    str(pair[1][0].get("name", "")).lower(),
+                    str(pair[1][0].get("name", "")),
+                ),
                 reverse=descending,
             )
             return [item for _, item in timestamped] + missing

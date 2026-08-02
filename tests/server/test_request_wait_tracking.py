@@ -60,6 +60,9 @@ class _FakeVikingFS:
         del ctx
         return f"/fake/{uri.replace('://', '/').strip('/')}"
 
+    def _ensure_mutable_access(self, uri: str, ctx):
+        del uri, ctx
+
     async def delete_temp(self, temp_uri: str, ctx=None):
         del temp_uri, ctx
         return None
@@ -68,8 +71,8 @@ class _FakeVikingFS:
         del ctx
         return self.content[uri]
 
-    async def write_file(self, uri: str, content: str, ctx=None):
-        del ctx
+    async def write_file(self, uri: str, content: str, ctx=None, lock_handle=None):
+        del ctx, lock_handle
         self.content[uri] = content
 
     async def rm(self, uri: str, ctx=None, lock_handle=None):
