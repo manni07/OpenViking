@@ -296,10 +296,17 @@ def main():
                 host=config.host,
                 port=config.port,
                 workers=workers,
+                ws="websockets-sansio",
                 log_config=None,
             )
         else:
-            uvicorn.run(app, host=config.host, port=config.port, log_config=None)
+            uvicorn.run(
+                app,
+                host=config.host,
+                port=config.port,
+                ws="websockets-sansio",
+                log_config=None,
+            )
     finally:
         # Cleanup vikingbot process on shutdown
         if bot_process is not None:

@@ -44,6 +44,14 @@ Dependency-Aktualisierung, nicht durch Unterdrückung im Projekt.
 
 ## Nicht ausgeführt
 
+### Nachtrag 2026-08-02
+
+Die historische Vollsuite-Evidenz oben wurde durch den Lark/WebSockets-
+Kompatibilitätslauf aktualisiert. Der lokale Merge-Runner ist jetzt mit allen
+fünf Checks PASS: Root `6164 passed, 246 skipped, 1` upstream Lark-Warnung;
+VikingBot `271 passed, 2` upstream Lark-Warnungen. Die alte Tabelle bleibt als
+Vorphasen-Nachweis erhalten.
+
 OpenClaw-P0/Service, Codex-H1/H2 und Provider-Live wurden nicht ausgeführt.
 Ihnen fehlt die separat genehmigte Live-Phase; sie sind HOLD/NOT RUN und nicht
 Teil des Offline-PASS.

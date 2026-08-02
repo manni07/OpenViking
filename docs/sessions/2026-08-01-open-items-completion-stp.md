@@ -35,6 +35,14 @@ auflösen.
 - Warnungen: ausschließlich `lark_oapi`/`websockets`, nicht lokal erzeugt.
 - Neustarts: keiner; keine Live-Credentials oder Live-Endpunkte verwendet.
 
+## Nachtrag 2026-08-02 — Lark/WebSockets
+
+Nach der Dependency-/SansIO-Behebung und der Isolation des Word-Parser-
+Test-Helfers bestand der lokale Merge-Runner alle fünf Checks. Die aktuelle
+Evidenz lautet Root `6164 passed, 246 skipped, 1` upstream Lark-Warnung und
+Bot `271 passed, 2` upstream Lark-Warnungen. Die WebSockets-Legacy-Warnungen
+sind beseitigt; die zwei vendorten Lark-Warnungen bleiben bewusst sichtbar.
+
 ## Sichere Offline-Reproduktion
 
 ```bash
