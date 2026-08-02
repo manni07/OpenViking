@@ -76,3 +76,18 @@ Freigabe, Credentials, Kosten-/TTL-Limits und eigene Evidenz:
 Die vier Drittanbieter-Warnungen sind dokumentiert, aber kein lokaler
 Abnahmefehler. Ein Fork-PR wird nach dem finalen Diff-/Testcheck aktualisiert;
 Merge oder Aktivierung erfolgen nicht automatisch.
+
+## Nachtrag 2026-08-02 — aktueller Fork- und Warning-Stand
+
+Die historische Warnungszählung oben bleibt als damalige Evidence erhalten.
+Der aktuelle frische Import-Ledger weist genau zwei Signaturen aus
+`lark-oapi 1.7.1` nach: vendortes `utcfromtimestamp` und der
+Import-time-Aufruf `asyncio.get_event_loop`. Beide sind im unveränderten
+Drittanbieterpaket verankert und werden weder lokal gefiltert noch in
+`site-packages` gepatcht; siehe
+[`2026-08-02-live-gates-and-lark-warning-ledger.md`](2026-08-02-live-gates-and-lark-warning-ledger.md).
+
+Der Fork-PR #8 ist inzwischen als Merge-Commit
+`373aa383511a62a8178208511c60b655ea406dfa` in `manni07/OpenViking:main`
+übernommen. H1/H2, OpenClaw-P0/Service und Provider-/Feishu-Live bleiben
+davon unabhängig `HOLD / NOT RUN`.

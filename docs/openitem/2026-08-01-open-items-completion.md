@@ -13,10 +13,11 @@
 
 ## Medium (3)
 
-1. **M1 — Drittanbieter-Warnungen (offline geschlossen):** `lark-oapi 1.7.1`,
+1. **M1 — Drittanbieter-Warnungen (Kompatibilität offline geschlossen):** `lark-oapi 1.7.1`,
    `uvicorn 0.52.1` und `websockets 15.0.1` sind kompatibel gelockt; der
    OpenViking-/Bot-Pfad nutzt SansIO. Zwei upstream Lark-Warnungen bleiben
-   sichtbar und ungefiltert als Wartungsrest.
+   sichtbar und ungefiltert als Wartungsrest; der genaue Ledger steht in
+   `docs/dossiers/2026-08-02-live-gates-and-lark-warning-ledger.md`.
 2. **M2 — Fork-PR-Review:** Commit/Push, CI und Review im Fork abschließen;
    der PR darf nicht automatisch gemergt werden.
 3. **M3 — Live-Evidence-Paket:** Für H1/H2/OpenClaw disposable Config,

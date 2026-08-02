@@ -43,4 +43,5 @@ separat sichtbar gehalten.
   Legacy-Warnung.
 - Der lokale CI-Runner besteht alle Checks.
 - Die zwei verbleibenden Lark-Upstream-Warnungen sind im Evidence-Ledger
-  benannt, nicht unterdrückt.
+  benannt, nicht unterdrückt (siehe
+  [`2026-08-02-live-gates-and-lark-warning-ledger.md`](2026-08-02-live-gates-and-lark-warning-ledger.md)).
