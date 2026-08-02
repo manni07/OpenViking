@@ -10,10 +10,12 @@
 | Q5 | OpenClaw P0/Service | Health/Handshake/aktuelle P0-Tests | HOLD / NOT RUN |
 | Q6 | Codex H1 Capability | exakter OAuth-Origin/Model/Threshold | HOLD / NOT RUN |
 | Q7 | Codex H2 Benchmark | 20 reale + 10 synthetische Szenarien | HOLD / NOT RUN |
-| Q8 | Dokumentation und Fork-PR | Diff-/Testcheck, Commit/Push/Review | IN PROGRESS |
+| Q8 | Dokumentation und Fork-PR | Diff-/Testcheck, Commit/Push/Review | PASS / MERGED |
 
-Der lokale CI-Nachweis für Q8 ist PASS; offen bleiben nur der externe
-Fork-PR-Review und die absichtlich angehaltenen Live-Gates.
+Der lokale CI-Nachweis für Q8 ist PASS. Fork-PR #8 wurde als
+`373aa383511a62a8178208511c60b655ea406dfa` in `manni07/OpenViking:main`
+gemergt. Offen bleiben ausschließlich die absichtlich angehaltenen Live-Gates
+und der dokumentierte Upstream-Warning-Rest.
 
 ## Agent-Waves (logical team 10)
 

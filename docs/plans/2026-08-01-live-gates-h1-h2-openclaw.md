@@ -1,8 +1,14 @@
 # Plan — OpenClaw-P0, Codex-H1 und Codex-H2 (Live-Phase)
 
 Status: **HOLD / NOT RUN**
-Stand: 2026-08-01
+Stand: 2026-08-02
 Ziel-Repository: `manni07/OpenViking`
+
+Der aktuelle Evidence-Ledger steht in
+[`docs/dossiers/2026-08-02-live-gates-and-lark-warning-ledger.md`](../dossiers/2026-08-02-live-gates-and-lark-warning-ledger.md).
+Die Offline-WebSocket-Kompatibilität ist abgeschlossen; die beiden
+Lark-Upstream-Warnungen bleiben separat dokumentiert und sind kein Anlass für
+einen lokalen Filter oder einen `site-packages`-Patch.
 
 ## Zweck und harte Grenzen
 
@@ -32,6 +38,13 @@ fehlenden Capability-Features.
    Eigentümer- und Modusprüfung eingerichtet. Vorheriger Zustand wird nicht
    überschrieben.
 5. `git status`, Branch, Commit und SHA-256-Manifeste werden eingefroren.
+
+Ohne diese Felder gibt es keinen Probe-Request. Insbesondere reichen ein
+vorhandenes OAuth-Token, ein lokaler Health-Endpunkt oder ein erfolgreicher
+Offline-Test nicht als implizite Freigabe. Für den H1-Pilot muss die
+Approval-Datei außerdem vor dem Credential-Resolver und vor jeder Client- oder
+Netzwerk-Factory strikt schema-validiert werden; unbekannte oder fehlende
+Felder schlagen fail-closed fehl.
 
 ## H1 — Capability-Probe
 
@@ -89,12 +102,20 @@ Default-Rollout.
 
 1. Vorab aktuellen Status, Port/Origin, PID/Container und Health read-only
    erfassen; kein altes Upgrade-/Reset-/Pkill-Skript verwenden.
-2. Mit temporären Settings einen echten MCP-Handshake und genau einen
-   read-only Tool-Aufruf ausführen.
-3. P0-Harness im eigenen Environment ausführen; Logs auf Secrets, falsche
-   Origins, Retry-Schleifen und Cross-Chain-State prüfen.
-4. Bei 503 der Embedding-Abhängigkeit, fehlendem Handshake, stale Harness oder
-   ungeklärter Prozessidentität sofort HOLD. Kein automatischer Restart.
+2. Vor dem Handshake eine disposable OpenClaw-Home-/Config- und
+   OpenViking-Workspace-Bindung belegen. Host-Home, feste `/app`-/1933-/18789-
+   Annahmen und der nicht versionierte Harness-`settings.py`-Pfad dürfen nicht
+   verwendet werden.
+3. Mit temporären Settings einen echten MCP-Handshake und genau einen
+   read-only Tool-Aufruf ausführen. Ein Health-Endpunkt allein ist kein
+   Handshake-Nachweis.
+4. P0-Harness im eigenen Environment ausführen; Nachrichten, Responses,
+   Secrets und Prompt-Inhalte bleiben aus Logs/Artefakten redigiert und
+   begrenzt. Der aktuelle Harness ist mutierend, solange diese Isolation nicht
+   bewiesen ist.
+5. Bei 503 der Embedding-Abhängigkeit, fehlendem Handshake, stale Harness,
+   rohen Sentinel-Secrets oder ungeklärter Prozessidentität sofort HOLD. Kein
+   automatischer Restart.
 
 ## Beweispaket und Stop-Regeln
 
@@ -114,5 +135,9 @@ Zustand unverändert lassen und den Gate-Status als HOLD dokumentieren.
 ## Abschluss
 
 Nach dem Live-Lauf werden STP, Development Diary, Manual, Proposal Dossier und
-Open-Item-Bericht aktualisiert. Der Fork-PR bleibt Draft, bis Review und alle
-Gates belegt sind; Merge oder Aktivierung erfolgen nicht automatisch.
+Open-Item-Bericht aktualisiert. Ein daraus entstehender Änderungs-PR bleibt
+Draft, bis Review und alle Gates belegt sind; Aktivierung erfolgt nicht
+automatisch.
+
+Bis zu dieser Freigabe ist der aktuelle Fork-Stand offline abgeschlossen und
+die vier Live-Gates bleiben unverändert `HOLD / NOT RUN`.
