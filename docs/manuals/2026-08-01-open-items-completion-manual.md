@@ -16,6 +16,17 @@ Fork-PRs. Es aktiviert keine Live-Gates.
 5. Ergebnisse und Drittanbieter-Warnungen getrennt protokollieren. Ein Skip
    ist kein Pass für ein Live-Gate.
 
+Der verbindliche lokale Merge-Lauf wird aus dem separaten Runner-Projekt
+gestartet:
+
+```bash
+uv run --directory /Volumes/ExtremePro/projects/local-ci-gate \
+  local-ci-gate run --stage merge --project "$PWD"
+```
+
+Der Runner führt nur die versionierten Argumentlisten aus
+`.local-ci-gate.toml` aus und verwendet weder GitHub noch eine Shell.
+
 ## Live-Gate-Vorbereitung
 
 OpenClaw, H1, H2 und Provider-Live benötigen jeweils eine neue Freigabe,

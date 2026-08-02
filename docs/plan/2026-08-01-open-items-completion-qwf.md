@@ -12,6 +12,9 @@
 | Q7 | Codex H2 Benchmark | 20 reale + 10 synthetische Szenarien | HOLD / NOT RUN |
 | Q8 | Dokumentation und Fork-PR | Diff-/Testcheck, Commit/Push/Review | IN PROGRESS |
 
+Der lokale CI-Nachweis für Q8 ist PASS; offen bleiben nur der externe
+Fork-PR-Review und die absichtlich angehaltenen Live-Gates.
+
 ## Agent-Waves (logical team 10)
 
 Die fachlichen Rollen bleiben `master_orchestrator`,

@@ -19,6 +19,21 @@ wird, gilt nicht als PASS.
 | Storage vollständig | 395 passed, 2 skipped |
 | AGFS-Smoke/Lifecycle | 5 passed / 2 passed |
 
+## Lokales CI-Gate
+
+Der Nachweis wurde ausschließlich über `/Volumes/ExtremePro/projects/local-ci-gate`
+ausgeführt, nicht über GitHub:
+
+```bash
+uv run --directory /Volumes/ExtremePro/projects/local-ci-gate \
+  local-ci-gate run --stage merge \
+  --project /Volumes/ExtremePro/projects/OpenViking-agent-worktrees/20260801-open-items-completion
+```
+
+Ergebnis: alle vier Checks PASS (`git-diff-check`,
+`collection-fixture-regressions`, `root-offline-suite`,
+`bot-standalone-suite`).
+
 ## Warning-Analyse
 
 Die vier Warnungen je Lauf kommen aus `lark_oapi` (`utcfromtimestamp`,

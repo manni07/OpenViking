@@ -14,6 +14,7 @@
 | Ausgangs-HEAD | `fdccb0b3` |
 | Haupt-Checkout | `/Volumes/ExtremePro/projects/OpenViking` — nicht verändern |
 | kanonische venv | `.venv` im Worktree |
+| lokaler CI-Runner | `/Volumes/ExtremePro/projects/local-ci-gate` |
 
 Vor jeder Fortsetzung zuerst `git status --short --branch`, Branch und Remote
 prüfen. Fremde Änderungen nicht resetten, überschreiben oder automatisch
@@ -29,6 +30,8 @@ auflösen.
 - Integration/storage/rerank: `420 passed, 2 skipped`.
 - Storage: `395 passed, 2 skipped`.
 - Native AGFS: Smoke `5 passed`, Lifecycle `2 passed`.
+- Lokales CI-Gate: alle vier Checks PASS; GitHub wurde für diesen Nachweis
+  nicht verwendet.
 - Warnungen: ausschließlich `lark_oapi`/`websockets`, nicht lokal erzeugt.
 - Neustarts: keiner; keine Live-Credentials oder Live-Endpunkte verwendet.
 
@@ -38,6 +41,8 @@ auflösen.
 cd /Volumes/ExtremePro/projects/OpenViking-agent-worktrees/20260801-open-items-completion
 git status --short --branch
 git diff --check
+uv run --directory /Volumes/ExtremePro/projects/local-ci-gate \
+  local-ci-gate run --stage merge --project "$PWD"
 env -u GOOGLE_API_KEY -u OPENAI_API_KEY -u OPENAI_ACCESS_TOKEN \
   -u ANTHROPIC_API_KEY -u OPENVIKING_CONFIG_FILE \
   PYTHONPATH="$PWD" .venv/bin/python -m pytest tests --collect-only -q \
