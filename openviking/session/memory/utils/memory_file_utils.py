@@ -76,6 +76,7 @@ def _serialize_with_metadata(
     content_template: str = None,
     extract_context: Any = None,
     source_uri: Optional[str] = None,
+    render_links: bool = True,
 ) -> str:
     content = metadata.pop("content", "") or ""
 
@@ -101,14 +102,13 @@ def _serialize_with_metadata(
 
     clean_metadata.pop("_uri", None)
     links = clean_metadata.get("links")
-    if isinstance(links, list) and source_uri:
-        # Only schema-valid stored links are rendered into the body.  Older
-        # metadata may contain URI/match_text-only reference records; keep
-        # those records lossless in MEMORY_FIELDS without mutating the plain
-        # body or creating links that cannot be interpreted by the memory
-        # graph.  ``StoredLink`` requires link_type, so this is the minimum
-        # compatibility gate for the legacy representation.
-        renderable_links = [link for link in links if isinstance(link, dict) and link.get("link_type")]
+    if render_links and isinstance(links, list) and source_uri:
+        # Older metadata may contain URI/match_text-only reference records.
+        # Preserve those records in MEMORY_FIELDS, but only render links that
+        # satisfy the stored-link schema expected by the memory graph.
+        renderable_links = [
+            link for link in links if isinstance(link, dict) and link.get("link_type")
+        ]
         if renderable_links:
             content = LinkRenderer.render_links(content, str(source_uri), renderable_links)
 
@@ -144,6 +144,7 @@ class MemoryFileUtils:
         memory_file: MemoryFile,
         content_template: Optional[str] = None,
         extract_context: Any = None,
+        render_links: bool = True,
     ) -> str:
         """Serialize a MemoryFile as plain-text body plus MEMORY_FIELDS metadata."""
         metadata = memory_file.to_metadata()
@@ -152,6 +153,7 @@ class MemoryFileUtils:
             content_template=content_template,
             extract_context=extract_context,
             source_uri=memory_file.uri,
+            render_links=render_links,
         )
 
     @staticmethod

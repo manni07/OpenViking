@@ -65,21 +65,9 @@ class FakeVikingFS:
     async def read(self, uri: str, offset: int = 0, size: int = -1) -> bytes:
         return self.files.get(uri, b"")
 
-    async def read_file(self, uri: str, offset: int = 0, size: int = -1) -> bytes:
-        return (await self.read(uri, offset=offset, size=size)).decode("utf-8")
-
-    async def glob(self, pattern: str, uri: str, **_kwargs) -> Dict[str, List[str]]:
-        prefix = uri.rstrip("/") + "/"
-        return {
-            "matches": [
-                file_uri
-                for file_uri in sorted(self.files)
-                if file_uri.startswith(prefix) and file_uri.endswith(".md")
-            ]
-        }
-
-    async def ls(self, uri: str, **_kwargs) -> List[Dict[str, Any]]:
+    async def ls(self, uri: str, **kw: Any) -> List[Dict[str, Any]]:
         """List direct children of *uri* (mirrors real AGFS entry format)."""
+        del kw
         prefix = uri.rstrip("/") + "/"
         children: Dict[str, bool] = {}  # name → is_dir
         for key in list(self.files.keys()) + self.dirs:
@@ -282,12 +270,38 @@ class TestEmptyDirectory:
 
     @pytest.mark.asyncio
     async def test_empty_dir_returns_zero_files(self, tmp_empty: Path, parser, fake_fs) -> None:
-        result = await parser.parse(str(tmp_empty))
+        blocked_path = tmp_empty / "blocked.pdf"
+        result = await parser.parse(
+            str(tmp_empty),
+            _source_meta={
+                "feishu_folder_skipped_items": [
+                    {
+                        "path": str(blocked_path),
+                        "name": blocked_path.name,
+                        "type": "file",
+                        "token": "file-token",
+                        "reason": "HTTP 403",
+                    }
+                ]
+            },
+        )
 
         assert result.parser_name == "DirectoryParser"
         assert result.source_format == "directory"
         assert result.temp_dir_path is not None
-        assert result.meta.get("file_count", 0) == 0 or len(fake_fs.files) == 0
+        assert result.meta["file_count"] == 0
+        assert result.meta["total_processable"] == 0
+        assert result.meta["failed_files"] == [
+            {
+                "path": "blocked.pdf",
+                "parser": "feishu",
+                "status": "failed",
+                "type": "file",
+                "token": "file-token",
+                "reason": "HTTP 403",
+            }
+        ]
+        assert any("Skipped Feishu Drive item blocked.pdf: HTTP 403" in w for w in result.warnings)
 
 
 # ---------------------------------------------------------------------------
@@ -406,6 +420,32 @@ class TestParserDelegation:
         assert len(fake_fs.files) > 0
 
     @pytest.mark.asyncio
+    async def test_no_split_flattens_single_markdown_to_original_relative_parent(
+        self,
+        tmp_path: Path,
+        parser,
+        fake_fs: FakeVikingFS,
+    ) -> None:
+        nested = tmp_path / "scripts"
+        nested.mkdir()
+        content = "\n\n".join(
+            f"paragraph {index} " + "x" * 1000 for index in range(20)
+        )
+        (nested / "screenplay.md").write_text(content, encoding="utf-8")
+
+        result = await parser.parse(str(tmp_path), split_content=False)
+
+        root = f"{result.temp_dir_path}/{tmp_path.name}"
+        body_files = {
+            uri: value
+            for uri, value in fake_fs.files.items()
+            if uri.startswith(root) and uri.endswith(".md")
+        }
+        assert body_files == {
+            f"{root}/scripts/screenplay.md": content.encode("utf-8")
+        }
+
+    @pytest.mark.asyncio
     async def test_txt_file_goes_through_parser(self, tmp_path: Path, parser, fake_fs) -> None:
         """Text files should be processed by TextParser (delegates to Markdown)."""
         (tmp_path / "notes.txt").write_text("some notes here", encoding="utf-8")
@@ -451,7 +491,10 @@ class TestParserDelegation:
             mock_assign.side_effect = assign_side_effect
             await parser.parse(str(tmp_path))
 
-        found_md = any(uri.endswith("report.md") for uri in fake_fs.files)
+        dir_name = tmp_path.name
+        found_md = any(
+            uri.endswith("report.md") and f"/{dir_name}/" in uri for uri in fake_fs.files
+        )
         assert found_md, f"report.md not found. Files: {list(fake_fs.files.keys())}"
 
     @pytest.mark.asyncio
@@ -490,7 +533,8 @@ class TestParserDelegation:
             mock_assign.side_effect = assign_side_effect
             await parser.parse(str(tmp_path))
 
-        found_md = any(uri.endswith("data.md") for uri in fake_fs.files)
+        dir_name = tmp_path.name
+        found_md = any(uri.endswith("data.md") and f"/{dir_name}/" in uri for uri in fake_fs.files)
         assert found_md, f"data.md not found. Files: {list(fake_fs.files.keys())}"
 
     @pytest.mark.asyncio
@@ -529,7 +573,8 @@ class TestParserDelegation:
             mock_assign.side_effect = assign_side_effect
             await parser.parse(str(tmp_path))
 
-        found_md = any(uri.endswith("book.md") for uri in fake_fs.files)
+        dir_name = tmp_path.name
+        found_md = any(uri.endswith("book.md") and f"/{dir_name}/" in uri for uri in fake_fs.files)
         assert found_md, f"book.md not found. Files: {list(fake_fs.files.keys())}"
 
     @pytest.mark.asyncio
@@ -568,7 +613,10 @@ class TestParserDelegation:
             mock_assign.side_effect = assign_side_effect
             await parser.parse(str(tmp_path))
 
-        found_md = any(uri.endswith("slides.md") for uri in fake_fs.files)
+        dir_name = tmp_path.name
+        found_md = any(
+            uri.endswith("slides.md") and f"/{dir_name}/" in uri for uri in fake_fs.files
+        )
         assert found_md, f"slides.md not found. Files: {list(fake_fs.files.keys())}"
 
     @pytest.mark.asyncio
@@ -607,7 +655,10 @@ class TestParserDelegation:
             mock_assign.side_effect = assign_side_effect
             await parser.parse(str(tmp_path))
 
-        found_md = any(uri.endswith("archive.md") for uri in fake_fs.files)
+        dir_name = tmp_path.name
+        found_md = any(
+            uri.endswith("archive.md") and f"/{dir_name}/" in uri for uri in fake_fs.files
+        )
         assert found_md, f"archive.md not found. Files: {list(fake_fs.files.keys())}"
 
 
@@ -664,6 +715,136 @@ class TestPDFConversion:
             uri.endswith("document.md") and f"/{dir_name}/" in uri for uri in fake_fs.files
         )
         assert found_md, f"document.md not found. Files: {list(fake_fs.files.keys())}"
+
+    @pytest.mark.asyncio
+    async def test_no_split_flattens_single_pdf_markdown_output(
+        self,
+        tmp_path: Path,
+        parser,
+        fake_fs,
+    ) -> None:
+        pdf_file = tmp_path / "report.pdf"
+        pdf_file.write_bytes(b"%PDF-1.4 fake pdf")
+        mock_temp = fake_fs.create_temp_uri()
+        doc_dir = f"{mock_temp}/report"
+        await fake_fs.mkdir(mock_temp)
+        await fake_fs.mkdir(doc_dir)
+        await fake_fs.write_file(f"{doc_dir}/report.md", "# Converted PDF")
+        fake_result = create_parse_result(
+            root=ResourceNode(type=NodeType.ROOT),
+            source_path=str(pdf_file),
+            source_format="pdf",
+            parser_name="PDFParser",
+            parse_time=0.1,
+        )
+        fake_result.temp_dir_path = mock_temp
+
+        with patch(
+            "openviking.parse.parsers.directory.DirectoryParser._assign_parser",
+        ) as mock_assign:
+            from openviking.parse.parsers.pdf import PDFParser as _PDF
+
+            mock_pdf = AsyncMock(spec=_PDF)
+            mock_pdf.parse = AsyncMock(return_value=fake_result)
+            mock_assign.side_effect = lambda cf, _registry: (
+                mock_pdf if cf.path.suffix == ".pdf" else None
+            )
+            result = await parser.parse(str(tmp_path), split_content=False)
+
+        root = f"{result.temp_dir_path}/{tmp_path.name}"
+        assert fake_fs.files[f"{root}/report.md"] == b"# Converted PDF"
+        assert not any(uri.startswith(f"{root}/report/") for uri in fake_fs.files)
+
+    @pytest.mark.asyncio
+    async def test_no_split_flattens_nested_pdf_when_parent_does_not_exist(
+        self,
+        tmp_path: Path,
+        parser,
+        fake_fs,
+    ) -> None:
+        nested = tmp_path / "novel"
+        nested.mkdir()
+        pdf_file = nested / "report.pdf"
+        pdf_file.write_bytes(b"%PDF-1.4 fake pdf")
+        mock_temp = fake_fs.create_temp_uri()
+        doc_dir = f"{mock_temp}/report"
+        await fake_fs.mkdir(mock_temp)
+        await fake_fs.mkdir(doc_dir)
+        await fake_fs.write_file(f"{doc_dir}/report.md", "# Converted PDF")
+        fake_result = create_parse_result(
+            root=ResourceNode(type=NodeType.ROOT),
+            source_path=str(pdf_file),
+            source_format="pdf",
+            parser_name="PDFParser",
+            parse_time=0.1,
+        )
+        fake_result.temp_dir_path = mock_temp
+
+        original_ls = fake_fs.ls
+
+        async def strict_ls(uri: str, **kwargs: Any) -> List[Dict[str, Any]]:
+            if uri not in fake_fs.dirs:
+                raise FileNotFoundError(uri)
+            return await original_ls(uri, **kwargs)
+
+        fake_fs.ls = strict_ls
+
+        with patch(
+            "openviking.parse.parsers.directory.DirectoryParser._assign_parser",
+        ) as mock_assign:
+            from openviking.parse.parsers.pdf import PDFParser as _PDF
+
+            mock_pdf = AsyncMock(spec=_PDF)
+            mock_pdf.parse = AsyncMock(return_value=fake_result)
+            mock_assign.side_effect = lambda cf, _registry: (
+                mock_pdf if cf.path.suffix == ".pdf" else None
+            )
+            result = await parser.parse(str(tmp_path), split_content=False)
+
+        root = f"{result.temp_dir_path}/{tmp_path.name}"
+        assert result.meta["failed_files"] == []
+        assert fake_fs.files[f"{root}/novel/report.md"] == b"# Converted PDF"
+        assert not any(uri.startswith(f"{root}/novel/report/") for uri in fake_fs.files)
+
+    @pytest.mark.asyncio
+    async def test_no_split_keeps_pdf_wrapper_for_markdown_and_image_outputs(
+        self,
+        tmp_path: Path,
+        parser,
+        fake_fs,
+    ) -> None:
+        pdf_file = tmp_path / "report.pdf"
+        pdf_file.write_bytes(b"%PDF-1.4 fake pdf")
+        mock_temp = fake_fs.create_temp_uri()
+        doc_dir = f"{mock_temp}/report"
+        await fake_fs.mkdir(mock_temp)
+        await fake_fs.mkdir(doc_dir)
+        await fake_fs.write_file(f"{doc_dir}/report.md", "# Converted PDF")
+        await fake_fs.write_file(f"{doc_dir}/page1.png", b"image")
+        fake_result = create_parse_result(
+            root=ResourceNode(type=NodeType.ROOT),
+            source_path=str(pdf_file),
+            source_format="pdf",
+            parser_name="PDFParser",
+            parse_time=0.1,
+        )
+        fake_result.temp_dir_path = mock_temp
+
+        with patch(
+            "openviking.parse.parsers.directory.DirectoryParser._assign_parser",
+        ) as mock_assign:
+            from openviking.parse.parsers.pdf import PDFParser as _PDF
+
+            mock_pdf = AsyncMock(spec=_PDF)
+            mock_pdf.parse = AsyncMock(return_value=fake_result)
+            mock_assign.side_effect = lambda cf, _registry: (
+                mock_pdf if cf.path.suffix == ".pdf" else None
+            )
+            result = await parser.parse(str(tmp_path), split_content=False)
+
+        root = f"{result.temp_dir_path}/{tmp_path.name}"
+        assert fake_fs.files[f"{root}/report/report.md"] == b"# Converted PDF"
+        assert fake_fs.files[f"{root}/report/page1.png"] == b"image"
 
     @pytest.mark.asyncio
     async def test_pdf_parse_failure_adds_warning(self, tmp_path: Path, parser, fake_fs) -> None:

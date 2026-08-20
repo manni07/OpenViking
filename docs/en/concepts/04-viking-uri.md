@@ -204,7 +204,7 @@ ov add-resource --parent-auto-create "viking://resources/emails/{calendar:today}
 ov read "viking://resources/logs/{calendar:yesterday}/app.log"
 
 # Prep tomorrow's tasks
-ov write --uri "viking://resources/tasks/{calendar:tomorrow}/todo.md" --content "Plan the day"
+ov write "viking://resources/tasks/{calendar:tomorrow}/todo.md" --content "Plan the day"
 
 # Upload monthly report, --parent-auto-create can be shortened to -p
 ov add-resource --parent-auto-create "viking://resources/reports/{calendar:ym}" ./report.pdf
@@ -333,7 +333,7 @@ Each directory may contain special files:
 |------|---------|
 | `.abstract.md` | L0 abstract (~100 tokens) |
 | `.overview.md` | L1 overview (~2k tokens) |
-| `.relations.json` | Related resources |
+| `` | Related resources |
 | `.meta.json` | Metadata |
 
 ## Best Practices

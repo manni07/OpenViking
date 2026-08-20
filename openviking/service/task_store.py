@@ -150,9 +150,11 @@ def _task_to_payload(task: Any) -> Dict[str, Any]:
         "resource_id": task.resource_id,
         "account_id": task.account_id,
         "user_id": task.user_id,
+        "meta": deepcopy(task.meta),
         "stage": task.stage,
         "result": deepcopy(task.result),
         "error": task.error,
+        "auth": deepcopy(task.auth),
     }
 
 

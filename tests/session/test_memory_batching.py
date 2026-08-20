@@ -4,8 +4,7 @@
 import asyncio
 import logging
 import os
-from contextlib import asynccontextmanager
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -59,6 +58,7 @@ class NorthwestTripMockVLM:
         return (content * 10)[:2000]
 
 
+@skip_if_not_manual
 @pytest.mark.asyncio
 async def test_manual_memory_batching_100_files(monkeypatch):
     """
@@ -75,7 +75,6 @@ async def test_manual_memory_batching_100_files(monkeypatch):
     mock_config = MagicMock()
     mock_config.vlm = mock_vlm
     mock_config.language_fallback = "zh-CN"
-    mock_config.output_language_override = ""
     mock_config.semantic.max_file_content_chars = 30000
     mock_config.semantic.max_skeleton_chars = 5000
     mock_config.semantic.max_overview_prompt_chars = 60000
@@ -83,7 +82,6 @@ async def test_manual_memory_batching_100_files(monkeypatch):
     mock_config.semantic.abstract_max_chars = 256
     mock_config.semantic.overview_max_chars = 4000
     mock_config.semantic.max_concurrent_llm = 10
-    mock_config.code.code_summary_mode = "llm"
 
     # 2. 模拟 AGFS/VikingFS 中的 100 个文件
     class MockVikingFS:
@@ -100,31 +98,20 @@ async def test_manual_memory_batching_100_files(monkeypatch):
                     }
                 )
 
-        async def ls(self, uri, node_limit=None, ctx=None):
-            del node_limit
+        async def ls(self, uri, ctx=None):
             return self.files
 
         async def read_file(self, uri, ctx=None):
             # 模拟读取 1000 字的流水账（由 LLM 构造）
             return await mock_vlm.get_completion_async(f"Generate diary for {uri}")
 
-        async def write_file(self, uri, content, ctx=None, lock_handle=None):
-            del lock_handle
+        async def write_file(self, uri, content, ctx=None):
             return True
 
         def _uri_to_path(self, uri, ctx=None):
             return uri.replace("viking://", "/")
 
     mock_fs = MockVikingFS()
-
-    @asynccontextmanager
-    async def unlocked_lock_context(*_args, **_kwargs):
-        yield None
-
-    # 3. 模拟 Tracker 和 WaitTracker
-    mock_wait_tracker = MagicMock()
-    mock_embedding_tracker = MagicMock()
-    mock_embedding_tracker.register = AsyncMock()
 
     # 使用 patch.multiple 来模拟多个 get_xxx 方法
     with (
@@ -133,17 +120,7 @@ async def test_manual_memory_batching_100_files(monkeypatch):
             return_value=mock_config,
         ),
         patch("openviking.storage.queuefs.semantic_processor.get_viking_fs", return_value=mock_fs),
-        patch(
-            "openviking.storage.queuefs.semantic_processor.get_request_wait_tracker",
-            return_value=mock_wait_tracker,
-        ),
-                patch(
-                    "openviking.storage.queuefs.embedding_tracker.EmbeddingTaskTracker.get_instance",
-                    return_value=mock_embedding_tracker,
-                ),
-                patch("openviking.storage.transaction.get_lock_manager", return_value=None),
-                patch("openviking.storage.transaction.LockContext", unlocked_lock_context),
-            ):
+    ):
         # 4. 初始化 Processor 并设置并发
         processor = SemanticProcessor(max_concurrent_llm=10)
 
@@ -194,7 +171,6 @@ async def test_manual_memory_batching_100_files(monkeypatch):
     # 100次 摘要生成 + 1次 overview(L1) + 1次 abstract(L0)
     # 因为 read_file 也被 mock 了，所以构造过程不再消耗 call_count
     assert mock_vlm.call_count >= 102
-    assert mock_embedding_tracker.register.called
 
     print("[Manual Test] 分批逻辑压力测试及并发验证成功。")
 

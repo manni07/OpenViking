@@ -303,8 +303,6 @@ class OpenVikingBuildExt(build_ext):
                     "maturin",
                     "build",
                     "--release",
-                    "--features",
-                    "s3",
                     "--out",
                     tmpdir,
                 ]
@@ -514,6 +512,23 @@ class OpenVikingBuildPy(build_py):
     def run(self):
         _build_web_studio()
         super().run()
+        package_root = Path(self.build_lib) / "vikingbot"
+        for asset_name in ("workspace", "bridge"):
+            source = SETUP_DIR / "bot" / asset_name
+            if not source.is_dir():
+                raise FileNotFoundError(
+                    f"required VikingBot asset directory not found: {source}"
+                )
+            destination = package_root / asset_name
+            if destination.exists():
+                shutil.rmtree(destination)
+            shutil.copytree(
+                source,
+                destination,
+                ignore=shutil.ignore_patterns(
+                    "node_modules", "dist", "__pycache__", "*.pyc"
+                ),
+            )
 
 
 if bdist_wheel is not None:
@@ -551,11 +566,14 @@ setup(
             "bin/ov.exe",
             "server/static/**/*",
             "web_studio/dist/**/*",
-            "console/static/**/*",
             "storage/vectordb/engine/*.abi3.so",
             "storage/vectordb/engine/*.pyd",
         ],
-        "vikingbot": ["console/static/**/*"],
+        "vikingbot": [
+            "console/static/**/*",
+            "workspace/**/*",
+            "bridge/**/*",
+        ],
     },
     include_package_data=True,
 )

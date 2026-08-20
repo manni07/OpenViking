@@ -17,15 +17,13 @@ import pytest
 import pytest_asyncio
 import uvicorn
 
-from openviking import AsyncOpenViking
-from openviking_cli.client.http import AsyncHTTPClient
 from openviking.models.embedder.base import DenseEmbedderBase, EmbedResult
 from openviking.server.app import create_app
 from openviking.server.config import ServerConfig
 from openviking.server.identity import RequestContext, Role
 from openviking.service.core import OpenVikingService
+from openviking.service.task_tracker import get_task_tracker
 from openviking.storage.queuefs import QueueManager, SessionCommitMsg, get_queue_manager
-from openviking.storage.transaction import reset_lock_manager
 from openviking_cli.session.user_id import UserIdentifier
 from openviking_cli.utils.config.embedding_config import EmbeddingConfig
 from openviking_cli.utils.config.vlm_config import VLMConfig
@@ -75,32 +73,7 @@ def _install_fake_embedder(monkeypatch):
 def _install_fake_vlm(monkeypatch):
     """Use a fake VLM so server tests never hit external LLM APIs."""
 
-    class FakeVLM:
-        model = "server-test-vlm"
-
-        async def get_completion_async(self, prompt="", **_kwargs):
-            if "context query planner" in str(prompt).lower():
-                return '{"queries": [], "reasoning": "server test fixture"}'
-            if "extract user-private configuration items" in str(prompt):
-                return '{"values": {"api_key": "secret-xyz", "base_url": "https://example.com"}}'
-            return "# Test Summary\n\nFake summary for testing.\n\n## Details\nTest content."
-
-        def get_completion(self, prompt="", **_kwargs):
-            if "context query planner" in str(prompt).lower():
-                return '{"queries": [], "reasoning": "server test fixture"}'
-            return "# Test Summary\n\nFake summary for testing.\n\n## Details\nTest content."
-
-        async def get_vision_completion_async(self, *_args, **_kwargs):
-            return "Fake image description for testing."
-
-        def get_vision_completion(self, *_args, **_kwargs):
-            return "Fake image description for testing."
-
-    fake_vlm = FakeVLM()
-
     async def _fake_get_completion(self, prompt, thinking=False):
-        if "context query planner" in str(prompt).lower():
-            return '{"queries": [], "reasoning": "server test fixture"}'
         if "extract user-private configuration items" in prompt:
             return '{"values": {"api_key": "secret-xyz", "base_url": "https://example.com"}}'
         return "# Test Summary\n\nFake summary for testing.\n\n## Details\nTest content."
@@ -111,17 +84,26 @@ def _install_fake_vlm(monkeypatch):
     monkeypatch.setattr(VLMConfig, "is_available", lambda self: True)
     monkeypatch.setattr(VLMConfig, "get_completion_async", _fake_get_completion)
     monkeypatch.setattr(VLMConfig, "get_vision_completion_async", _fake_get_vision_completion)
-    monkeypatch.setattr(VLMConfig, "get_vlm_instance", lambda _self: fake_vlm)
 
 
 def _install_session_commit_queue_fallback(service: OpenVikingService, monkeypatch) -> None:
     """Execute SessionCommit jobs when MockLocalAGFS cannot dequeue QueueFS entries."""
     queue_manager = get_queue_manager()
     original_enqueue = queue_manager.enqueue
+    queued_commit_tasks: set[str] = set()
+    tracker = get_task_tracker()
+    original_has_work = tracker.has_work
+    monkeypatch.setattr(
+        tracker,
+        "has_work",
+        lambda task_id: task_id in queued_commit_tasks or original_has_work(task_id),
+    )
 
     async def enqueue_with_session_commit_fallback(queue_name, data):
         if queue_name != QueueManager.SESSION_COMMIT:
             return await original_enqueue(queue_name, data)
+
+        queued_commit_tasks.add(data["task_id"])
 
         async def process_commit() -> None:
             await asyncio.sleep(0)
@@ -129,15 +111,26 @@ def _install_session_commit_queue_fallback(service: OpenVikingService, monkeypat
             ctx = RequestContext(
                 user=UserIdentifier.from_dict(msg.user),
                 role=Role.USER,
-                actor_peer_id=msg.actor_peer_id,
             )
             queued_session = service.sessions.session(
                 ctx,
                 msg.session_id,
                 session_uri=msg.session_uri,
             )
+            while True:
+                phase1 = await queued_session._read_phase1_meta(msg.archive_uri)
+                if phase1.get("status") == "ready" or await queued_session._archive_file_exists(
+                    msg.archive_uri,
+                    ".failed.json",
+                ):
+                    break
+                await asyncio.sleep(0)
             await queued_session.load()
-            await queued_session.resume_queued_commit(msg)
+            try:
+                while not await queued_session.resume_queued_commit(msg):
+                    await asyncio.sleep(0)
+            finally:
+                queued_commit_tasks.discard(msg.task_id)
 
         asyncio.create_task(process_commit())
         return data["task_id"]
@@ -194,8 +187,7 @@ def upload_temp_dir(temp_dir: Path, monkeypatch) -> Path:
 
 @pytest_asyncio.fixture(scope="function")
 async def service(temp_dir: Path, monkeypatch):
-    """Create and initialize an OpenVikingService in embedded mode."""
-    reset_lock_manager()
+    """Create and initialize an OpenVikingService for in-process API tests."""
     fake_embedder_cls = _install_fake_embedder(monkeypatch)
     _install_fake_vlm(monkeypatch)
     svc = OpenVikingService(
@@ -206,7 +198,6 @@ async def service(temp_dir: Path, monkeypatch):
     _install_session_commit_queue_fallback(svc, monkeypatch)
     yield svc
     await svc.close()
-    reset_lock_manager()
 
 
 @pytest_asyncio.fixture(scope="function")
@@ -259,13 +250,11 @@ async def client_with_resource(client, service, sample_markdown_file):
 @pytest_asyncio.fixture(scope="function")
 async def running_server(temp_dir: Path, monkeypatch):
     """Start a real uvicorn server in a background thread."""
-    await AsyncOpenViking.reset()
-    reset_lock_manager()
     fake_embedder_cls = _install_fake_embedder(monkeypatch)
     _install_fake_vlm(monkeypatch)
 
     @asynccontextmanager
-    async def _noop_mcp_lifespan(_session_manager=None):
+    async def _noop_mcp_lifespan():
         yield
 
     monkeypatch.setattr("openviking.server.mcp_endpoint.mcp_lifespan", _noop_mcp_lifespan)
@@ -321,24 +310,3 @@ async def running_server(temp_dir: Path, monkeypatch):
     server.should_exit = True
     thread.join(timeout=5)
     await svc.close()
-    await AsyncOpenViking.reset()
-
-
-@pytest_asyncio.fixture(scope="function")
-async def http_client(running_server):
-    """Share the real SDK client fixture with server-side filter regressions."""
-    port, svc, sdk_user_key = running_server
-    client = AsyncHTTPClient(
-        url=f"http://127.0.0.1:{port}",
-        api_key=sdk_user_key,
-        account="",
-        user="",
-        timeout=33.0,
-        extra_headers={},
-        profile_enabled=False,
-    )
-    await client.initialize()
-    try:
-        yield client, svc
-    finally:
-        await client.close()

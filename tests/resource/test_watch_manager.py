@@ -96,6 +96,7 @@ class TestWatchTask:
         assert task.created_at is not None
         assert task.last_execution_time is None
         assert task.next_execution_time is None
+        assert task.processing_mode == "semantic_and_vectors"
 
     def test_create_task_with_all_fields(self):
         """Test creating a task with all fields specified."""
@@ -108,6 +109,7 @@ class TestWatchTask:
             reason="Test reason",
             instruction="Test instruction",
             watch_interval=30.0,
+            processing_mode="vectors_only",
             created_at=now,
             last_execution_time=now,
             next_execution_time=now + timedelta(minutes=30),
@@ -121,6 +123,7 @@ class TestWatchTask:
         assert task.reason == "Test reason"
         assert task.instruction == "Test instruction"
         assert task.watch_interval == 30.0
+        assert task.processing_mode == "vectors_only"
         assert task.is_active is False
         assert task.created_at == now
         assert task.last_execution_time == now
@@ -148,6 +151,7 @@ class TestWatchTask:
         assert data["to_uri"] == "viking://test"
         assert data["created_at"] == now.isoformat()
         assert data["is_active"] is True
+        assert data["processing_mode"] == "semantic_and_vectors"
         assert "auth_state" not in data
 
     def test_unknown_fields_are_ignored_and_datetime_json_remains_iso8601(self):
@@ -176,6 +180,7 @@ class TestWatchTask:
             "reason": "Test",
             "instruction": "Instruction",
             "watch_interval": 45.0,
+            "processing_mode": "vectors_only",
             "created_at": now.isoformat(),
             "last_execution_time": now.isoformat(),
             "next_execution_time": (now + timedelta(minutes=45)).isoformat(),
@@ -188,9 +193,16 @@ class TestWatchTask:
         assert task.path == "/test/path"
         assert task.to_uri == "viking://test"
         assert task.watch_interval == 45.0
+        assert task.processing_mode == "vectors_only"
         assert task.is_active is False
         assert task.created_at == now
         assert task.last_execution_time == now
+
+    def test_from_dict_defaults_legacy_processing_mode(self):
+        task = WatchTask.from_dict({"path": "/test/path"})
+
+        assert task.processing_mode == "semantic_and_vectors"
+        assert task.to_is_directory is None
 
     def test_calculate_next_execution_time(self):
         """Test calculating next execution time."""
@@ -273,31 +285,24 @@ class TestWatchManager:
         assert (await watch_manager_no_fs.get_task(sibling.task_id)).is_active is True
 
     @pytest.mark.asyncio
-    async def test_sync_tasks_with_resource_move_internal_rolls_back_task_state_on_save_failure(
-        self, watch_manager_no_fs: WatchManager
-    ):
-        root = await watch_manager_no_fs.create_task(
+    async def test_target_prefix_rewrite_rolls_back_task_state_on_save_failure(self):
+        manager = WatchManager()
+        root = await manager.create_task(
             path="/test/root",
             to_uri="viking://resources/codeask/wiki",
             parent_uri=None,
             watch_interval=30.0,
         )
-        watch_manager_no_fs._save_tasks = AsyncMock(side_effect=RuntimeError("save failed"))
-        move_resource = AsyncMock()
-        rollback_resource = AsyncMock()
+        manager._save_tasks = AsyncMock(side_effect=RuntimeError("save failed"))
 
         with pytest.raises(RuntimeError, match="save failed"):
-            await watch_manager_no_fs.sync_tasks_with_resource_move_internal(
+            await manager.rewrite_target_prefix_internal(
                 "viking://resources/codeask/wiki",
                 "viking://resources/codeask/wiki-renamed",
-                move_resource=move_resource,
-                rollback_resource=rollback_resource,
                 account_id=TEST_ACCOUNT_ID,
             )
 
-        move_resource.assert_awaited_once()
-        rollback_resource.assert_awaited_once()
-        restored = await watch_manager_no_fs.get_task(root.task_id)
+        restored = await manager.get_task(root.task_id)
         assert restored is not None
         assert restored.to_uri == "viking://resources/codeask/wiki"
         assert restored.parent_uri is None
@@ -311,10 +316,14 @@ class TestWatchManager:
         with pytest.raises(ConflictError):
             await manager.create_task(path="/duplicate", account_id="account-a", to_uri=uri)
 
-        await manager.sync_tasks_with_resource_move_internal(
+        await manager.validate_target_prefix_rewrite_internal(
             uri,
             f"{uri}-moved",
-            move_resource=AsyncMock(),
+            account_id="account-a",
+        )
+        await manager.rewrite_target_prefix_internal(
+            uri,
+            f"{uri}-moved",
             account_id="account-a",
         )
         deactivated = await manager.deactivate_tasks_under_uri_internal(uri, "account-b")

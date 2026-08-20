@@ -14,7 +14,6 @@ import shutil
 import socket
 import threading
 import time
-from functools import lru_cache
 from pathlib import Path
 
 import httpx
@@ -22,10 +21,9 @@ import pytest
 import pytest_asyncio
 import uvicorn
 
-from openviking import AsyncOpenViking
-from openviking.models.embedder.base import DenseEmbedderBase, EmbedResult
 from openviking.server.app import create_app
 from openviking.server.config import ServerConfig
+from openviking.server.identity import RequestContext, Role
 from openviking.service.core import OpenVikingService
 from openviking_cli.session.user_id import UserIdentifier
 from openviking_cli.utils.config.open_viking_config import OpenVikingConfigSingleton
@@ -51,40 +49,6 @@ requires_volcengine_kms = pytest.mark.skipif(
     not (VOLCENGINE_ACCESS_KEY and VOLCENGINE_SECRET_KEY and VOLCENGINE_KMS_KEY_ID),
     reason="VOLCENGINE_ACCESS_KEY, VOLCENGINE_SECRET_KEY, or VOLCENGINE_KMS_KEY_ID not set",
 )
-
-# ── Qdrant integration test helpers ─────────────────────────────────────────
-QDRANT_URL = os.environ.get("QDRANT_URL", "http://127.0.0.1:6333").rstrip("/")
-QDRANT_API_KEY = os.environ.get("QDRANT_API_KEY", "")
-
-
-@lru_cache(maxsize=1)
-def _qdrant_available() -> bool:
-    try:
-        headers = {"api-key": QDRANT_API_KEY} if QDRANT_API_KEY else None
-        response = httpx.get(
-            f"{QDRANT_URL}/collections",
-            headers=headers,
-            timeout=2.0,
-        )
-        return response.status_code == 200
-    except Exception:
-        return False
-
-
-requires_qdrant = pytest.mark.qdrant
-
-
-def pytest_configure(config):
-    config.addinivalue_line("markers", "qdrant: requires a reachable Qdrant instance")
-
-
-@pytest.fixture(autouse=True)
-def _skip_when_qdrant_unavailable(request):
-    if request.node.get_closest_marker("qdrant") is None:
-        return
-    if not _qdrant_available():
-        pytest.skip(f"Qdrant not available at {QDRANT_URL}")
-
 
 # (model_name, default_dimension, token_limit)
 GEMINI_MODELS = [
@@ -129,7 +93,7 @@ def gemini_config_dict(
     query_param: str | None = None,
     doc_param: str | None = None,
 ) -> dict:
-    """Build a minimal embedded-mode config for Gemini-backed integration tests."""
+    """Build a minimal service config for Gemini-backed integration tests."""
     return {
         "storage": {
             "workspace": str(TEST_TMP_DIR / "gemini"),
@@ -149,14 +113,16 @@ def gemini_config_dict(
     }
 
 
-async def teardown_ov_client() -> None:
-    """Reset singleton client/config state used by embedded integration tests."""
-    await AsyncOpenViking.reset()
+async def teardown_ov_service(service: OpenVikingService | None = None) -> None:
+    if service is not None:
+        await service.close()
     OpenVikingConfigSingleton.reset_instance()
 
 
-async def make_ov_client(config_dict: dict, data_path: str) -> AsyncOpenViking:
-    """Create an AsyncOpenViking client from an explicit config dict."""
+async def make_ov_service(
+    config_dict: dict,
+    data_path: str,
+) -> tuple[OpenVikingService, RequestContext]:
     if not GOOGLE_API_KEY:
         pytest.skip("GOOGLE_API_KEY not set")
     try:
@@ -164,8 +130,7 @@ async def make_ov_client(config_dict: dict, data_path: str) -> AsyncOpenViking:
     except (ImportError, ModuleNotFoundError, AttributeError):
         pytest.skip("google-genai not installed")
 
-    await teardown_ov_client()
-
+    OpenVikingConfigSingleton.reset_instance()
     workspace = Path(data_path)
     shutil.rmtree(workspace, ignore_errors=True)
     workspace.mkdir(parents=True, exist_ok=True)
@@ -175,49 +140,44 @@ async def make_ov_client(config_dict: dict, data_path: str) -> AsyncOpenViking:
     storage["workspace"] = str(workspace)
     storage.setdefault("agfs", {"backend": "local"})
     storage.setdefault("vectordb", {"name": "test", "backend": "local", "project": "default"})
-
     OpenVikingConfigSingleton.initialize(config_dict=effective_config)
 
-    client = AsyncOpenViking(path=str(workspace))
-    await client.initialize()
-    return client
+    user = UserIdentifier.the_default_user("gemini_test")
+    service = OpenVikingService(path=str(workspace), user=user)
+    await service.initialize()
+    return service, RequestContext(user=user, role=Role.USER)
 
 
 def sample_markdown(base_dir: Path, slug: str, content: str) -> Path:
-    """Write a markdown file for an integration test case."""
     path = base_dir / f"{slug}.md"
     path.write_text(content, encoding="utf-8")
     return path
 
 
 @pytest_asyncio.fixture(scope="function")
-async def gemini_ov_client(tmp_path):
-    """Provide a Gemini-backed OpenViking client and its model metadata."""
+async def gemini_ov_service(tmp_path):
     model = "gemini-embedding-2-preview"
     dim = 768
-    client = await make_ov_client(gemini_config_dict(model, dim), str(tmp_path / "ov_gemini"))
+    service, ctx = await make_ov_service(
+        gemini_config_dict(model, dim),
+        str(tmp_path / "ov_gemini"),
+    )
     try:
-        yield client, model, dim
+        yield service, ctx, model, dim
     finally:
-        await teardown_ov_client()
+        await teardown_ov_service(service)
 
 
 @pytest.fixture(scope="session")
-def server_temp_dir(tmp_path_factory: pytest.TempPathFactory) -> Path:
-    """Own the long-lived workspace used only by the in-process HTTP server."""
-    return tmp_path_factory.mktemp("openviking_integration_server")
-
-
-@pytest.fixture(scope="function")
-def temp_dir(tmp_path: Path) -> Path:
-    """Provide per-test storage for integration files and embedded clients."""
-    path = tmp_path / "integration"
-    path.mkdir()
-    return path
+def temp_dir():
+    """Create temp directory for the whole test session."""
+    shutil.rmtree(TEST_TMP_DIR, ignore_errors=True)
+    TEST_TMP_DIR.mkdir(parents=True, exist_ok=True)
+    yield TEST_TMP_DIR
 
 
 @pytest.fixture(scope="session")
-def server_url(server_temp_dir):
+def server_url(temp_dir):
     """Start a real uvicorn server in a background thread.
 
     Returns the base URL (e.g. ``http://127.0.0.1:<port>``).
@@ -225,125 +185,39 @@ def server_url(server_temp_dir):
     """
     import asyncio
 
-    class OfflineEmbedder(DenseEmbedderBase):
-        def __init__(self, dimension: int = 4):
-            super().__init__(model_name="integration-fixture-embedder", config={"provider": "test"})
-            self._dimension = dimension
-
-        def embed(self, text: str, is_query: bool = False) -> EmbedResult:
-            return EmbedResult(dense_vector=[0.0] * self._dimension)
-
-        def get_dimension(self) -> int:
-            return self._dimension
-
-    class OfflineVLM:
-        model = "integration-fixture-vlm"
-
-        async def get_completion_async(self, prompt: str = "", **_kwargs) -> str:
-            if "context query planner" in prompt.lower():
-                return '{"queries": [], "reasoning": "offline integration fixture"}'
-            return "# Integration fixture summary"
-
-        def get_completion(self, prompt: str = "", **_kwargs) -> str:
-            if "context query planner" in prompt.lower():
-                return '{"queries": [], "reasoning": "offline integration fixture"}'
-            return "# Integration fixture summary"
-
-        async def get_vision_completion_async(self, *_args, **_kwargs) -> str:
-            return "Integration fixture image summary"
-
-        def get_vision_completion(self, *_args, **_kwargs) -> str:
-            return "Integration fixture image summary"
-
-    offline_vlm = OfflineVLM()
-    OpenVikingConfigSingleton.reset_instance()
-    OpenVikingConfigSingleton.initialize(
-        config_dict={
-            "default_account": "integration-fixture",
-            "default_user": "integration-fixture",
-            "storage": {
-                "workspace": str(server_temp_dir / "data"),
-                "agfs": {"backend": "local"},
-                "vectordb": {"name": "test", "backend": "local", "project": "default"},
-            },
-            "embedding": {
-                "dense": {
-                    "provider": "litellm",
-                    "model": "integration-fixture",
-                    "dimension": 4,
-                }
-            },
-            "vlm": {"provider": None, "model": None},
-        }
-    )
-    fixture_config = OpenVikingConfigSingleton.get_instance()
-    # Bind doubles to this fixture's config instances only.  A session-scoped
-    # class monkeypatch would leak into unrelated provider-factory tests.
-    object.__setattr__(fixture_config.embedding, "get_embedder", lambda: OfflineEmbedder())
-    object.__setattr__(fixture_config.vlm, "is_available", lambda: True)
-    object.__setattr__(
-        fixture_config.vlm,
-        "get_completion_async",
-        lambda prompt="", **kwargs: offline_vlm.get_completion_async(prompt, **kwargs),
-    )
-    object.__setattr__(
-        fixture_config.vlm,
-        "get_vision_completion_async",
-        lambda prompt, images, **kwargs: offline_vlm.get_vision_completion_async(
-            prompt, images, **kwargs
-        ),
-    )
-    object.__setattr__(fixture_config.vlm, "get_vlm_instance", lambda: offline_vlm)
-
     loop = asyncio.new_event_loop()
-    svc = None
-    server = None
-    thread = None
-    try:
-        svc = OpenVikingService(
-            path=str(server_temp_dir / "data"), user=UserIdentifier.the_default_user("test_user")
-        )
-        loop.run_until_complete(svc.initialize())
-        svc.viking_fs.query_embedder = OfflineEmbedder()
 
-        config = ServerConfig()
-        fastapi_app = create_app(config=config, service=svc)
+    svc = OpenVikingService(
+        path=str(temp_dir / "data"), user=UserIdentifier.the_default_user("test_user")
+    )
+    loop.run_until_complete(svc.initialize())
 
-        # Find a free port
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            s.bind(("127.0.0.1", 0))
-            port = s.getsockname()[1]
+    config = ServerConfig()
+    fastapi_app = create_app(config=config, service=svc)
 
-        uvi_config = uvicorn.Config(fastapi_app, host="127.0.0.1", port=port, log_level="warning")
-        server = uvicorn.Server(uvi_config)
-        thread = threading.Thread(target=server.run, daemon=True)
-        thread.start()
+    # Find a free port
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(("127.0.0.1", 0))
+        port = s.getsockname()[1]
 
-        # Wait for server ready
-        url = f"http://127.0.0.1:{port}"
-        for _ in range(50):
-            try:
-                r = httpx.get(f"{url}/health", timeout=1)
-                if r.status_code == 200:
-                    break
-            except Exception:
-                time.sleep(0.1)
+    uvi_config = uvicorn.Config(fastapi_app, host="127.0.0.1", port=port, log_level="warning")
+    server = uvicorn.Server(uvi_config)
+    thread = threading.Thread(target=server.run, daemon=True)
+    thread.start()
 
-        yield url
-    finally:
-        if server is not None:
-            server.should_exit = True
-        if thread is not None:
-            thread.join(timeout=5)
-        if svc is not None:
-            loop.run_until_complete(svc.close())
-        loop.close()
-        for config_object, attribute in (
-            (fixture_config.embedding, "get_embedder"),
-            (fixture_config.vlm, "is_available"),
-            (fixture_config.vlm, "get_completion_async"),
-            (fixture_config.vlm, "get_vision_completion_async"),
-            (fixture_config.vlm, "get_vlm_instance"),
-        ):
-            object.__delattr__(config_object, attribute)
-        OpenVikingConfigSingleton.reset_instance()
+    # Wait for server ready
+    url = f"http://127.0.0.1:{port}"
+    for _ in range(50):
+        try:
+            r = httpx.get(f"{url}/health", timeout=1)
+            if r.status_code == 200:
+                break
+        except Exception:
+            time.sleep(0.1)
+
+    yield url
+
+    server.should_exit = True
+    thread.join(timeout=5)
+    loop.run_until_complete(svc.close())
+    loop.close()

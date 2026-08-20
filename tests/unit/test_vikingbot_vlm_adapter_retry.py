@@ -1,21 +1,23 @@
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock
 
 import httpx
 import pytest
-from volcenginesdkarkruntime._exceptions import ArkRateLimitError
-
-vlm_adapter = pytest.importorskip(
-    "vikingbot.providers.vlm_adapter",
-    reason="vikingbot is exercised by the standalone bot pytest manifest",
+import vikingbot.providers.vlm_adapter as vlm_adapter
+from vikingbot.providers.vlm_adapter import VLMProviderAdapter
+from volcenginesdkarkruntime._exceptions import (
+    ArkAPITimeoutError,
+    ArkBadRequestError,
+    ArkRateLimitError,
 )
-VLMProviderAdapter = vlm_adapter.VLMProviderAdapter
 
-import openviking.utils.model_retry as model_retry
 from openviking.models.vlm.backends.openai_vlm import OpenAIVLM
+from openviking.models.vlm.backends.volcengine_vlm import (
+    VOLCENGINE_CLIENT_REQUEST_ID,
+    VOLCENGINE_CLIENT_REQUEST_ID_HEADER,
+    VolcEngineVLM,
+    build_volcengine_request_headers,
+)
 from openviking.utils.model_retry import is_retryable_rate_limit_error
-
-pytestmark = pytest.mark.bot
 
 
 class _DisabledLangfuse:
@@ -59,9 +61,11 @@ class _FakeStreamingCompletions:
         self.failures = list(failures)
         self.chunks = chunks
         self.calls = 0
+        self.kwargs: list[dict] = []
 
-    async def create(self, **_kwargs):
+    async def create(self, **kwargs):
         self.calls += 1
+        self.kwargs.append(kwargs)
         if self.failures:
             raise self.failures.pop(0)
         return _AsyncChunks(self.chunks)
@@ -79,6 +83,14 @@ class _FakeStreamingVLM:
 
     def get_async_client(self):
         return self._client
+
+
+class _CaptureLogger:
+    def __init__(self):
+        self.messages: list[str] = []
+
+    def error(self, message: str, *args):
+        self.messages.append(message.format(*args))
 
 
 @pytest.mark.asyncio
@@ -157,6 +169,48 @@ async def test_chat_accepts_string_response_from_openai_backend_with_tools(monke
 
 
 @pytest.mark.asyncio
+async def test_chat_without_tools_preserves_usage_from_openai_backend(monkeypatch):
+    raw_response = SimpleNamespace(
+        choices=[
+            SimpleNamespace(
+                message=SimpleNamespace(content="plain response", tool_calls=None),
+                finish_reason="stop",
+            )
+        ],
+        usage=SimpleNamespace(
+            prompt_tokens=13,
+            completion_tokens=5,
+            total_tokens=18,
+            prompt_tokens_details=None,
+            completion_tokens_details=None,
+        ),
+    )
+
+    async def create(**kwargs):
+        assert "tools" not in kwargs
+        return raw_response
+
+    client = SimpleNamespace(
+        chat=SimpleNamespace(completions=SimpleNamespace(create=create)),
+    )
+    vlm = OpenAIVLM({"provider": "openai", "model": "gpt-5.6-terra"})
+    monkeypatch.setattr(vlm, "get_async_client", lambda: client)
+    adapter = VLMProviderAdapter(vlm, "gpt-5.6-terra", langfuse_client=_DisabledLangfuse())
+
+    response = await adapter.chat(messages=[{"role": "user", "content": "hello"}])
+
+    assert response.content == "plain response"
+    assert response.tool_calls == []
+    assert response.finish_reason == "stop"
+    assert response.usage == {
+        "prompt_tokens": 13,
+        "completion_tokens": 5,
+        "total_tokens": 18,
+        "prompt_tokens_details": None,
+    }
+
+
+@pytest.mark.asyncio
 async def test_chat_stream_retries_rate_limit_until_success(monkeypatch):
     sleep_delays: list[float] = []
 
@@ -221,6 +275,167 @@ async def test_chat_stream_routes_failover_wrapper_through_completion_api():
     assert events[0].response.content == "fallback-safe"
 
 
+@pytest.mark.asyncio
+async def test_chat_stream_logs_timeout_cause_and_request_metadata(monkeypatch):
+    request = httpx.Request(
+        "POST",
+        "https://ark.example.test/api/v3/chat/completions?api_key=must-not-leak",
+    )
+    cause = httpx.ReadTimeout("read deadline exceeded", request=request)
+    error = ArkAPITimeoutError(request=request, request_id="request-123")
+    error.__cause__ = cause
+    completions = _FakeStreamingCompletions([error], [])
+    adapter = VLMProviderAdapter(
+        _FakeStreamingVLM(completions),
+        "test-model",
+        langfuse_client=_DisabledLangfuse(),
+    )
+    captured = _CaptureLogger()
+    monkeypatch.setattr(vlm_adapter, "logger", captured)
+
+    events = [
+        event
+        async for event in adapter.chat_stream(
+            messages=[{"role": "user", "content": "hello"}],
+        )
+    ]
+
+    assert events[-1].response.finish_reason == "error"
+    assert len(captured.messages) == 1
+    log_message = captured.messages[0]
+    assert "operation=chat_stream" in log_message
+    assert "error_type=ArkAPITimeoutError" in log_message
+    assert 'client_request_id="request-123"' in log_message
+    assert "server_request_id=-" in log_message
+    assert "server_trace_id=-" in log_message
+    assert "method=POST" in log_message
+    assert "url=https://ark.example.test/api/v3/chat/completions" in log_message
+    assert "cause_chain=ReadTimeout: read deadline exceeded" in log_message
+    assert "must-not-leak" not in log_message
+
+
+def test_exception_log_details_include_redacted_upstream_error_body():
+    request = httpx.Request(
+        "POST",
+        "https://ark.example.test/api/v3/chat/completions?token=query-secret",
+    )
+    response = httpx.Response(
+        400,
+        request=request,
+        headers={
+            "X-Request-Id": "ark-server-request-456",
+            "X-Trace-Id": "ark-server-trace-456",
+        },
+    )
+    error = ArkBadRequestError(
+        "invalid request",
+        response=response,
+        body={
+            "code": "InvalidParameter",
+            "message": "invalid max_tokens",
+            "api_key": "body-secret",
+            "authorization": "Bearer header-secret",
+        },
+        request_id="request-456",
+    )
+
+    details = vlm_adapter._exception_log_details(error)
+
+    assert details == {
+        "error_type": "ArkBadRequestError",
+        "status": "400",
+        "code": '"InvalidParameter"',
+        "client_request_id": '"request-456"',
+        "server_request_id": "ark-server-request-456",
+        "server_trace_id": "ark-server-trace-456",
+        "method": "POST",
+        "url": "https://ark.example.test/api/v3/chat/completions",
+        "response_body": (
+            '{"code":"InvalidParameter","message":"invalid max_tokens",'
+            '"api_key":"<redacted>","authorization":"<redacted>"}'
+        ),
+        "cause_chain": "-",
+        "traceback": "-",
+    }
+
+
+@pytest.mark.asyncio
+async def test_volcengine_stream_uses_unique_default_client_request_ids():
+    completions = _FakeStreamingCompletions([], [])
+    adapter = VLMProviderAdapter(
+        _FakeStreamingVLM(completions),
+        "test-model",
+        langfuse_client=_DisabledLangfuse(),
+    )
+
+    for _ in range(2):
+        _ = [
+            event
+            async for event in adapter.chat_stream(
+                messages=[{"role": "user", "content": "hello"}],
+            )
+        ]
+
+    request_ids = [
+        kwargs["extra_headers"][VOLCENGINE_CLIENT_REQUEST_ID_HEADER]
+        for kwargs in completions.kwargs
+    ]
+    assert len(set(request_ids)) == 2
+    assert all(value.startswith(f"{VOLCENGINE_CLIENT_REQUEST_ID},") for value in request_ids)
+
+
+@pytest.mark.asyncio
+async def test_volcengine_non_stream_uses_unique_default_client_request_ids(monkeypatch):
+    calls: list[dict] = []
+
+    async def create(**kwargs):
+        calls.append(kwargs)
+        return SimpleNamespace(
+            choices=[
+                SimpleNamespace(
+                    message=SimpleNamespace(content="ok", tool_calls=None),
+                    finish_reason="stop",
+                )
+            ],
+            usage=None,
+        )
+
+    vlm = VolcEngineVLM(
+        {
+            "provider": "volcengine",
+            "model": "test-model",
+            "api_key": "test-key",
+            "max_retries": 0,
+        }
+    )
+    monkeypatch.setattr(
+        vlm,
+        "get_async_client",
+        lambda: SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create))),
+    )
+
+    for _ in range(2):
+        assert await vlm.get_completion_async(messages=[{"role": "user", "content": "hi"}]) == "ok"
+
+    request_ids = [kwargs["extra_headers"][VOLCENGINE_CLIENT_REQUEST_ID_HEADER] for kwargs in calls]
+    assert len(set(request_ids)) == 2
+    assert all(value.startswith(f"{VOLCENGINE_CLIENT_REQUEST_ID},") for value in request_ids)
+
+
+def test_volcengine_request_headers_preserve_custom_client_request_id():
+    headers = build_volcengine_request_headers(
+        {
+            "x-client-request-id": "caller-owned-request-id",
+            "X-Tenant": "tenant-a",
+        }
+    )
+
+    assert headers == {
+        "x-client-request-id": "caller-owned-request-id",
+        "X-Tenant": "tenant-a",
+    }
+
+
 def test_rate_limit_classifier_handles_target_error():
     assert is_retryable_rate_limit_error(
         RuntimeError("Error code: 429 - ModelAccountTpmRateLimitExceeded")
@@ -256,376 +471,3 @@ def test_rate_limit_classifier_handles_structured_sdk_errors():
     )
 
     assert is_retryable_rate_limit_error(exc)
-
-
-def _mark_non_retryable(error: Exception) -> Exception:
-    mark = getattr(model_retry, "mark_vlm_error_non_retryable", None)
-    assert callable(mark), "model_retry must define mark_vlm_error_non_retryable"
-    assert mark(error) is error
-    return error
-
-
-def _is_marked(error: Exception) -> bool:
-    check = getattr(model_retry, "is_vlm_error_non_retryable", None)
-    assert callable(check), "model_retry must define is_vlm_error_non_retryable"
-    return check(error)
-
-
-@pytest.mark.asyncio
-async def test_chat_stops_marked_error_before_rate_limit_classifier_or_replay(monkeypatch):
-    error = _mark_non_retryable(RuntimeError("429 after partial stream"))
-    fake_vlm = _FakeVLM([error])
-    classifier = MagicMock(return_value=True)
-    sleep = AsyncMock()
-    monkeypatch.setattr(vlm_adapter, "is_retryable_rate_limit_error", classifier)
-    monkeypatch.setattr(vlm_adapter.asyncio, "sleep", sleep)
-    adapter = VLMProviderAdapter(fake_vlm, "test-model", langfuse_client=_DisabledLangfuse())
-
-    response = await adapter.chat(messages=[{"role": "user", "content": "hello"}])
-
-    assert response.finish_reason == "error"
-    assert fake_vlm.calls == 1
-    classifier.assert_not_called()
-    sleep.assert_not_called()
-
-
-class _FailAfterEvents:
-    def __init__(self, events, error: Exception):
-        self._events = list(events)
-        self._error = error
-
-    def __aiter__(self):
-        return self._iterate()
-
-    async def _iterate(self):
-        for event in self._events:
-            yield event
-        raise self._error
-
-
-class _OneShotStreamingCompletions:
-    def __init__(self, response):
-        self.response = response
-        self.calls = 0
-
-    async def create(self, **_kwargs):
-        self.calls += 1
-        return self.response
-
-
-def _native_event(shape: str):
-    if shape == "empty":
-        return SimpleNamespace(usage=None, choices=[])
-    if shape == "usage-only":
-        return SimpleNamespace(
-            usage=SimpleNamespace(
-                prompt_tokens=1,
-                completion_tokens=0,
-                total_tokens=1,
-            ),
-            choices=[],
-        )
-    delta = SimpleNamespace(content=None, reasoning_content=None, tool_calls=[])
-    if shape == "reasoning-only":
-        delta.reasoning_content = "reasoning"
-    elif shape == "content":
-        delta.content = "visible"
-    elif shape == "tool-only":
-        delta.tool_calls = [
-            SimpleNamespace(
-                index=0,
-                id="call-1",
-                function=SimpleNamespace(name="lookup", arguments="{}"),
-            )
-        ]
-    else:
-        raise AssertionError(f"unsupported shape: {shape}")
-    return SimpleNamespace(
-        usage=None,
-        choices=[SimpleNamespace(finish_reason=None, delta=delta)],
-    )
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize(
-    "shape",
-    ["empty", "usage-only", "reasoning-only", "content", "tool-only"],
-)
-async def test_native_stream_marks_every_read_event_before_shape_handling(
-    monkeypatch,
-    shape,
-):
-    error = RuntimeError(f"429 after {shape} event")
-    completions = _OneShotStreamingCompletions(_FailAfterEvents([_native_event(shape)], error))
-    classifier = MagicMock(return_value=False)
-    sleep = AsyncMock()
-    monkeypatch.setattr(vlm_adapter, "is_retryable_rate_limit_error", classifier)
-    monkeypatch.setattr(vlm_adapter.asyncio, "sleep", sleep)
-    adapter = VLMProviderAdapter(
-        _FakeStreamingVLM(completions),
-        "test-model",
-        langfuse_client=_DisabledLangfuse(),
-    )
-
-    events = [
-        event
-        async for event in adapter.chat_stream(
-            messages=[{"role": "user", "content": "hello"}],
-        )
-    ]
-
-    assert _is_marked(error) is True
-    assert completions.calls == 1
-    classifier.assert_not_called()
-    sleep.assert_not_called()
-    assert events[-1].type == "response"
-    assert events[-1].response.finish_reason == "error"
-
-
-class _ExplodingEvent:
-    def __init__(self, error: Exception):
-        self._error = error
-
-    @property
-    def usage(self):
-        raise self._error
-
-
-@pytest.mark.asyncio
-async def test_native_stream_marks_progress_before_first_property_access(monkeypatch):
-    error = RuntimeError("SENTINEL-FIRST-PROPERTY")
-    completions = _OneShotStreamingCompletions(_AsyncChunks([_ExplodingEvent(error)]))
-    classifier = MagicMock(return_value=False)
-    sleep = AsyncMock()
-    monkeypatch.setattr(vlm_adapter, "is_retryable_rate_limit_error", classifier)
-    monkeypatch.setattr(vlm_adapter.asyncio, "sleep", sleep)
-    adapter = VLMProviderAdapter(
-        _FakeStreamingVLM(completions),
-        "test-model",
-        langfuse_client=_DisabledLangfuse(),
-    )
-
-    events = [
-        event
-        async for event in adapter.chat_stream(
-            messages=[{"role": "user", "content": "hello"}],
-        )
-    ]
-
-    assert _is_marked(error) is True
-    assert completions.calls == 1
-    classifier.assert_not_called()
-    sleep.assert_not_called()
-    assert events[-1].response.finish_reason == "error"
-
-
-class _SentinelError(RuntimeError):
-    def __init__(self, sentinel):
-        super().__init__(f"{sentinel}-MESSAGE", f"{sentinel}-ARGS")
-        self.opaque_payload = {"credential": f"{sentinel}-OPAQUE"}
-        self.__cause__ = RuntimeError(f"{sentinel}-CAUSE")
-        self.__context__ = RuntimeError(f"{sentinel}-CONTEXT")
-
-    def __repr__(self):
-        return f"SentinelError({self.args[0]}-REPR)"
-
-
-class _MarkerAssignmentRejectingSentinelError(_SentinelError):
-    def __setattr__(self, name, value):
-        if name == "_openviking_vlm_non_retryable":
-            raise RuntimeError("instance marker assignment denied")
-        super().__setattr__(name, value)
-
-
-_REDACTED_RESPONSE = "VLM response interrupted after partial output."
-_REDACTED_LOG = "VLM adapter stopped a non-retryable partial stream."
-_REDACTED_CATEGORY = "partial_stream_non_retryable"
-
-
-class _CaptureObservation:
-    def __init__(self, calls):
-        self.calls = calls
-
-    def update(self, **kwargs):
-        self.calls.append(("update", kwargs))
-
-    def end(self):
-        self.calls.append(("end", {}))
-
-
-class _CaptureLangfuse:
-    enabled = True
-
-    def __init__(self):
-        self._client = self
-        self.calls = []
-
-    def start_observation(self, **kwargs):
-        self.calls.append(("start", kwargs))
-        return _CaptureObservation(self.calls)
-
-    def register_generation(self, *_args, **kwargs):
-        self.calls.append(("register", kwargs))
-
-    def update_generation_metadata(self, _response_id, metadata):
-        return metadata
-
-    def flush(self):
-        self.calls.append(("flush", {}))
-
-
-@pytest.mark.asyncio
-async def test_marked_chat_error_redacts_response_logger_and_langfuse_payload(monkeypatch):
-    responses = []
-    captures = []
-    logger = MagicMock()
-    classifier = MagicMock(return_value=True)
-    sleep = AsyncMock()
-    monkeypatch.setattr(vlm_adapter, "logger", logger)
-    monkeypatch.setattr(vlm_adapter, "is_retryable_rate_limit_error", classifier)
-    monkeypatch.setattr(vlm_adapter.asyncio, "sleep", sleep)
-
-    forbidden = []
-    for sentinel in ("SENTINEL-MESSAGE-A", "SENTINEL-OPAQUE-B"):
-        langfuse = _CaptureLangfuse()
-        error = _mark_non_retryable(_SentinelError(sentinel))
-        forbidden.extend(
-            (
-                str(error),
-                repr(error),
-                repr(error.opaque_payload),
-                str(error.__cause__),
-                str(error.__context__),
-            )
-        )
-        adapter = VLMProviderAdapter(_FakeVLM([error]), "test-model", langfuse)
-        responses.append(await adapter.chat([{"role": "user", "content": "safe"}]))
-        captures.append(langfuse.calls)
-
-    assert [item.content for item in responses] == [_REDACTED_RESPONSE] * 2
-    assert [item.finish_reason for item in responses] == ["error", "error"]
-    assert [item.args for item in logger.mock_calls] == [(_REDACTED_LOG,)] * 2
-    updates = [[payload for name, payload in calls if name == "update"] for calls in captures]
-    assert (
-        updates == [[{"output": _REDACTED_RESPONSE, "metadata": {"error": _REDACTED_CATEGORY}}]] * 2
-    )
-    captured = repr((responses, logger.mock_calls, captures))
-    assert all(value not in captured for value in forbidden)
-    classifier.assert_not_called()
-    sleep.assert_not_called()
-
-
-@pytest.mark.asyncio
-async def test_marked_native_stream_error_redacts_terminal_response_and_all_sinks(monkeypatch):
-    terminal_contents = []
-    captures = []
-    logger = MagicMock()
-    classifier = MagicMock(return_value=True)
-    sleep = AsyncMock()
-    monkeypatch.setattr(vlm_adapter, "logger", logger)
-    monkeypatch.setattr(vlm_adapter, "is_retryable_rate_limit_error", classifier)
-    monkeypatch.setattr(vlm_adapter.asyncio, "sleep", sleep)
-
-    forbidden = []
-    for sentinel in ("SENTINEL-STREAM-A", "SENTINEL-STREAM-B"):
-        error = _mark_non_retryable(_SentinelError(sentinel))
-        forbidden.extend(
-            (
-                str(error),
-                repr(error),
-                repr(error.opaque_payload),
-                str(error.__cause__),
-                str(error.__context__),
-            )
-        )
-        completions = _OneShotStreamingCompletions(
-            _FailAfterEvents([_native_event("content")], error)
-        )
-        langfuse = _CaptureLangfuse()
-        adapter = VLMProviderAdapter(_FakeStreamingVLM(completions), "test-model", langfuse)
-        events = [
-            event async for event in adapter.chat_stream([{"role": "user", "content": "safe"}])
-        ]
-        terminal = events[-1].response
-        assert terminal.finish_reason == "error"
-        terminal_contents.append(terminal.content)
-        captures.append(langfuse.calls)
-        captured = repr((events, logger.mock_calls, langfuse.calls))
-        assert all(value not in captured for value in forbidden)
-
-    assert terminal_contents == [_REDACTED_RESPONSE] * 2
-    assert [item.args for item in logger.mock_calls] == [(_REDACTED_LOG,)] * 2
-    updates = [[payload for name, payload in calls if name == "update"] for calls in captures]
-    assert (
-        updates == [[{"output": _REDACTED_RESPONSE, "metadata": {"error": _REDACTED_CATEGORY}}]] * 2
-    )
-    classifier.assert_not_called()
-    sleep.assert_not_called()
-
-
-@pytest.mark.asyncio
-async def test_marked_native_stream_langfuse_allows_only_response_id_metadata(monkeypatch):
-    response_id = "response-id-only"
-    monkeypatch.setattr(vlm_adapter, "get_current_response_id", lambda: response_id)
-    monkeypatch.setattr(vlm_adapter, "logger", MagicMock())
-    monkeypatch.setattr(vlm_adapter, "is_retryable_rate_limit_error", MagicMock(return_value=True))
-    monkeypatch.setattr(vlm_adapter.asyncio, "sleep", AsyncMock())
-
-    error = _mark_non_retryable(_SentinelError("SENTINEL-STREAM-RESPONSE-ID"))
-    completions = _OneShotStreamingCompletions(_FailAfterEvents([_native_event("content")], error))
-    langfuse = _CaptureLangfuse()
-    adapter = VLMProviderAdapter(_FakeStreamingVLM(completions), "test-model", langfuse)
-
-    events = [event async for event in adapter.chat_stream([{"role": "user", "content": "safe"}])]
-
-    assert events[-1].response.content == _REDACTED_RESPONSE
-    updates = [payload for name, payload in langfuse.calls if name == "update"]
-    assert updates == [
-        {
-            "output": _REDACTED_RESPONSE,
-            "metadata": {
-                "error": _REDACTED_CATEGORY,
-                "response_id": response_id,
-            },
-        }
-    ]
-
-
-@pytest.mark.asyncio
-async def test_native_stream_wraps_assignment_rejection_without_replay_or_secret_leak(monkeypatch):
-    sentinel = "SENTINEL-REJECTING-MARKER"
-    error = _MarkerAssignmentRejectingSentinelError(sentinel)
-    completions = _OneShotStreamingCompletions(_FailAfterEvents([_native_event("content")], error))
-    logger = MagicMock()
-    classifier = MagicMock(return_value=True)
-    sleep = AsyncMock()
-    langfuse = _CaptureLangfuse()
-    monkeypatch.setattr(vlm_adapter, "logger", logger)
-    monkeypatch.setattr(vlm_adapter, "is_retryable_rate_limit_error", classifier)
-    monkeypatch.setattr(vlm_adapter.asyncio, "sleep", sleep)
-    adapter = VLMProviderAdapter(_FakeStreamingVLM(completions), "test-model", langfuse)
-
-    events = [event async for event in adapter.chat_stream([{"role": "user", "content": "safe"}])]
-
-    assert completions.calls == 1
-    classifier.assert_not_called()
-    sleep.assert_not_called()
-    assert events[-1].response.content == _REDACTED_RESPONSE
-    assert [item.args for item in logger.mock_calls] == [(_REDACTED_LOG,)]
-    updates = [payload for name, payload in langfuse.calls if name == "update"]
-    assert updates == [{"output": _REDACTED_RESPONSE, "metadata": {"error": _REDACTED_CATEGORY}}]
-    assert sentinel not in repr((events, logger.mock_calls, langfuse.calls))
-
-
-@pytest.mark.asyncio
-async def test_unmarked_chat_error_retains_legacy_visible_error_detail(monkeypatch):
-    sentinel = "SENTINEL-UNMARKED-POSITIVE-CONTROL"
-    monkeypatch.setattr(vlm_adapter.asyncio, "sleep", AsyncMock())
-    adapter = VLMProviderAdapter(
-        _FakeVLM([_SentinelError(sentinel)]),
-        "test-model",
-        _DisabledLangfuse(),
-    )
-    response = await adapter.chat([{"role": "user", "content": "safe"}])
-    assert response.finish_reason == "error"
-    assert sentinel in response.content

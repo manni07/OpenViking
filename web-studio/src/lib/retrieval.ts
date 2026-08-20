@@ -19,7 +19,6 @@ export interface FindResultItem {
   overview?: string | null
   category: string
   match_reason: string
-  relations: Array<{ uri: string; abstract: string }>
   result_kind?: 'semantic' | 'grep' | 'glob'
   line?: number
 }
@@ -48,15 +47,23 @@ export interface GroupedFindResult {
 export interface VikingApiError {
   code: string
   message: string
+  requestId?: string
   statusCode?: number
   details?: unknown
 }
 
 export interface FetchFindOptions {
+  contextTypes?: FindContextType[]
+  includeProvenance?: boolean
+  levels?: number[]
   targetUri?: string
   limit?: number
   scoreThreshold?: number
   filter?: Record<string, unknown>
+  since?: string
+  tags?: string[]
+  timeField?: 'created_at' | 'updated_at'
+  until?: string
 }
 
 export interface FetchSearchOptions extends FetchFindOptions {
@@ -82,6 +89,7 @@ function toVikingApiError(error: unknown): VikingApiError {
     code: normalized.code,
     details: normalized.details,
     message: normalized.message,
+    requestId: normalized.requestId,
     statusCode: normalized.statusCode,
   }
 }
@@ -111,20 +119,6 @@ function normalizeFindItems(
       match_reason:
         typeof item.match_reason === 'string' ? item.match_reason : '',
       overview: typeof item.overview === 'string' ? item.overview : null,
-      relations: Array.isArray(item.relations)
-        ? item.relations
-            .filter(
-              (relation): relation is Record<string, unknown> =>
-                relation !== null &&
-                typeof relation === 'object' &&
-                !Array.isArray(relation),
-            )
-            .map((relation) => ({
-              abstract:
-                typeof relation.abstract === 'string' ? relation.abstract : '',
-              uri: typeof relation.uri === 'string' ? relation.uri : '',
-            }))
-        : [],
       score: typeof item.score === 'number' ? item.score : 0,
       uri: typeof item.uri === 'string' ? item.uri : '',
     }))
@@ -199,10 +193,24 @@ export async function fetchFind(
       postSearchFind({
         body: {
           filter: options.filter,
+          context_type:
+            options.contextTypes && options.contextTypes.length > 0
+              ? options.contextTypes
+              : undefined,
+          include_provenance: options.includeProvenance,
+          level:
+            options.levels && options.levels.length > 0
+              ? options.levels
+              : undefined,
           limit: options.limit ?? 10,
           query,
           score_threshold: options.scoreThreshold,
+          since: options.since,
+          tags:
+            options.tags && options.tags.length > 0 ? options.tags : undefined,
           target_uri: options.targetUri,
+          time_field: options.timeField,
+          until: options.until,
         },
       }),
     )
@@ -222,11 +230,25 @@ export async function fetchSearch(
       postSearchSearch({
         body: {
           filter: options.filter,
+          context_type:
+            options.contextTypes && options.contextTypes.length > 0
+              ? options.contextTypes
+              : undefined,
+          include_provenance: options.includeProvenance,
+          level:
+            options.levels && options.levels.length > 0
+              ? options.levels
+              : undefined,
           limit: options.limit ?? 10,
           query,
           score_threshold: options.scoreThreshold,
+          since: options.since,
           session_id: options.sessionId,
+          tags:
+            options.tags && options.tags.length > 0 ? options.tags : undefined,
           target_uri: options.targetUri,
+          time_field: options.timeField,
+          until: options.until,
         },
       }),
     )
@@ -272,7 +294,6 @@ function patternResultItem(
     level: 2,
     line: options.line,
     match_reason: '',
-    relations: [],
     result_kind: kind,
     score: 0,
     uri,
