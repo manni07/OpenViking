@@ -16,15 +16,22 @@ describe("recall resource type registry", () => {
   it("normalizes arrays and comma/newline-separated strings without changing legacy behavior", () => {
     expect(normalizeRecallResourceTypes(undefined)).toEqual(["user", "agent"]);
     expect(normalizeRecallResourceTypes([])).toEqual(["user", "agent"]);
+    expect(normalizeRecallResourceTypes("  ")).toEqual(["user", "agent"]);
     expect(normalizeRecallResourceTypes(" resource,\nuser,agent,user ")).toEqual([
       "resource",
       "user",
       "agent",
     ]);
     expect(() => normalizeRecallResourceTypes(["user", "project"])).toThrow("invalid resourceTypes: project");
+    expect(() => normalizeRecallResourceTypes(["session", "user"])).toThrow("invalid resourceTypes: session");
   });
 
   it("builds context-type search plans without deprecated agent/session URI paths", () => {
+    expect(resolveRecallSearchPlan(undefined, { ovSessionId: "ov-1" })).toEqual({
+      resourceTypes: ["user", "agent"],
+      searches: [{ resourceType: "user", contextType: "memory" }],
+      skipped: [],
+    });
     expect(resolveRecallSearchPlan(["resource", "user", "agent"], { ovSessionId: "ov-1" })).toEqual({
       resourceTypes: ["resource", "user", "agent"],
       searches: [

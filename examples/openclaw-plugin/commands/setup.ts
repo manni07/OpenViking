@@ -6,9 +6,9 @@ import { fileURLToPath } from "node:url";
 import { getEnv } from "../runtime-utils.js";
 import {
   cleanOpenVikingRequestHeaders,
-  resolveOpenVikingRequestHeaders,
   type OpenVikingRequestHeaders,
 } from "../request-headers.js";
+import { createSetupNetworkProbes } from "../services/setup/probe-service.js";
 
 const HOME = os.homedir();
 const OPENCLAW_DIR = getEnv("OPENCLAW_STATE_DIR") || path.join(HOME, ".openclaw");
@@ -312,87 +312,18 @@ type ApiKeyProbeResult = {
   detail: string;
 };
 
+const setupNetworkProbes = createSetupNetworkProbes({
+  pluginVersion: PLUGIN_VERSION,
+  compatRange: formatCompatRange(),
+  checkVersionCompatibility,
+});
+
 async function probeApiKeyType(
   baseUrl: string,
   apiKey?: string,
   configuredHeaders?: OpenVikingRequestHeaders,
 ): Promise<ApiKeyProbeResult> {
-  if (!apiKey) return { keyType: "no_key", needsAccountId: false, needsUserId: false, detail: "No API key configured" };
-
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 10_000);
-  const sessionsUrl = `${baseUrl.replace(/\/+$/, "")}/api/v1/sessions?limit=1`;
-  try {
-    const configuredRequestHeaders = resolveOpenVikingRequestHeaders({ headers: configuredHeaders });
-    const headers: Record<string, string> = {};
-    headers["X-API-Key"] = apiKey;
-    Object.assign(headers, configuredRequestHeaders);
-    const response = await fetch(sessionsUrl, {
-      headers,
-      signal: controller.signal,
-    });
-
-    if (response.ok) {
-      return { keyType: "user_key", needsAccountId: false, needsUserId: false, detail: "API key has full user context" };
-    }
-
-    // Server raises InvalidArgumentError (-> HTTP 400) when a ROOT key calls
-    // tenant-scoped endpoints without X-OpenViking-Account / X-OpenViking-User.
-    // 401/403 may also be returned by older versions, FastAPI validation can
-    // surface as 422. Treat all four as candidates for tenant-context errors.
-    if ([400, 401, 403, 422].includes(response.status)) {
-      let body = "";
-      try {
-        body = await response.text();
-      } catch { /* ignore parse errors */ }
-      const lower = body.toLowerCase();
-      const needsAccount = /x-openviking-account|account[_ ]?id|account context|tenant/.test(lower);
-      const needsUser = /x-openviking-user|user[_ ]?id|user context|user key/.test(lower);
-      if (needsAccount || needsUser) {
-        return {
-          keyType: "root_key",
-          needsAccountId: needsAccount,
-          needsUserId: needsUser,
-          detail: body.slice(0, 200),
-        };
-      }
-
-      // Body did not name account/user/tenant explicitly (custom auth middleware,
-      // localized message, etc.). Re-probe with placeholder tenant headers; if
-      // the failure was due to missing tenant headers the response will change.
-      try {
-        const probeHeaders: Record<string, string> = {
-          "X-API-Key": apiKey,
-          "X-OpenViking-Account": "__probe__",
-          "X-OpenViking-User": "__probe__",
-          ...configuredRequestHeaders,
-        };
-        const probe2 = await fetch(sessionsUrl, {
-          headers: probeHeaders,
-          signal: controller.signal,
-        });
-        if (probe2.status !== response.status) {
-          return {
-            keyType: "root_key",
-            needsAccountId: true,
-            needsUserId: true,
-            detail: body.slice(0, 200) || `HTTP ${response.status} -> ${probe2.status} after adding tenant headers`,
-          };
-        }
-      } catch { /* ignore probe errors, fall through to unknown */ }
-
-      if (response.status === 401 || response.status === 403) {
-        return { keyType: "unknown", needsAccountId: false, needsUserId: false, detail: `HTTP ${response.status} - authentication failed, verify your API key` };
-      }
-      return { keyType: "unknown", needsAccountId: false, needsUserId: false, detail: `HTTP ${response.status}${body ? ` - ${body.slice(0, 160)}` : ""}` };
-    }
-
-    return { keyType: "unknown", needsAccountId: false, needsUserId: false, detail: `HTTP ${response.status}` };
-  } catch (err) {
-    return { keyType: "unknown", needsAccountId: false, needsUserId: false, detail: String(err instanceof Error ? err.message : err) };
-  } finally {
-    clearTimeout(timeoutId);
-  }
+  return setupNetworkProbes.probeApiKeyType(baseUrl, apiKey, configuredHeaders);
 }
 
 async function checkServiceHealth(
@@ -400,36 +331,7 @@ async function checkServiceHealth(
   apiKey?: string,
   configuredHeaders?: OpenVikingRequestHeaders,
 ): Promise<HealthResult> {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 10_000);
-  try {
-    const configuredRequestHeaders = resolveOpenVikingRequestHeaders({ headers: configuredHeaders });
-    const headers: Record<string, string> = {};
-    if (apiKey) {
-      headers["X-API-Key"] = apiKey;
-    }
-    Object.assign(headers, configuredRequestHeaders);
-    const response = await fetch(`${baseUrl.replace(/\/+$/, "")}/health`, {
-      headers,
-      signal: controller.signal,
-    });
-    if (response.ok) {
-      try {
-        const data = await response.json() as Record<string, unknown>;
-        const result = (data.result ?? data) as Record<string, unknown>;
-        const version = String(result.version ?? data.version ?? "");
-        const compatibility = checkVersionCompatibility(version);
-        return { ok: true, version, error: "", compatibility, pluginVersion: PLUGIN_VERSION, compatRange: formatCompatRange() };
-      } catch {
-        return { ok: true, version: "", error: "", compatibility: "unknown", pluginVersion: PLUGIN_VERSION, compatRange: formatCompatRange() };
-      }
-    }
-    return { ok: false, version: "", error: `HTTP ${response.status}`, compatibility: "unknown", pluginVersion: PLUGIN_VERSION, compatRange: formatCompatRange() };
-  } catch (err) {
-    return { ok: false, version: "", error: String(err instanceof Error ? err.message : err), compatibility: "unknown", pluginVersion: PLUGIN_VERSION, compatRange: formatCompatRange() };
-  } finally {
-    clearTimeout(timeoutId);
-  }
+  return setupNetworkProbes.checkServiceHealth(baseUrl, apiKey, configuredHeaders);
 }
 
 function readOpenClawConfig(configPath: string): Record<string, unknown> {

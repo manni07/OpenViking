@@ -1,11 +1,13 @@
 # Plan — OpenClaw-P0, Codex-H1 und Codex-H2 (Live-Phase)
 
-Status: **HOLD / NOT RUN**
+Status: **H1 PASS; OpenClaw-disposable-Service und MCP PASS; H2 / OpenClaw-P0 / Provider-Live weiterhin offen**
 Stand: 2026-08-02
 Ziel-Repository: `manni07/OpenViking`
 
 Der aktuelle Evidence-Ledger steht in
 [`docs/dossiers/2026-08-02-live-gates-and-lark-warning-ledger.md`](../dossiers/2026-08-02-live-gates-and-lark-warning-ledger.md).
+Die noch benötigten H2/P0/Feishu-Felder stehen ausführbar in
+[`docs/plans/2026-08-02-live-gate-inputs.md`](2026-08-02-live-gate-inputs.md).
 Die Offline-WebSocket-Kompatibilität ist abgeschlossen; die beiden
 Lark-Upstream-Warnungen bleiben separat dokumentiert und sind kein Anlass für
 einen lokalen Filter oder einen `site-packages`-Patch.
@@ -45,6 +47,85 @@ Offline-Test nicht als implizite Freigabe. Für den H1-Pilot muss die
 Approval-Datei außerdem vor dem Credential-Resolver und vor jeder Client- oder
 Netzwerk-Factory strikt schema-validiert werden; unbekannte oder fehlende
 Felder schlagen fail-closed fehl.
+
+## Ausführungsprotokoll — 2026-08-02
+
+Die aktuelle Ausführung wurde durch den Auftraggeber ausdrücklich gestartet.
+Sie verwendete ausschließlich einen privaten, temporären OAuth-Arbeitsbereich;
+der bestehende OpenViking-Dienst auf `127.0.0.1:1933` wurde weder
+neugestartet noch beendet. Tokenwerte und opaque Response-Inhalte wurden nicht
+in Artefakte oder Logs übernommen.
+
+Für H1 wurden die tatsächlich vom ChatGPT-Codex-Account unterstützten
+Parameter verwendet: Origin `https://chatgpt.com/backend-api/codex`, Modell
+`gpt-5.3-codex-spark`, `store=false`, `reasoning.effort=low` und
+`context_management.compact_threshold=1000`. Der zuvor verwendete Modellname
+`gpt-5.3-codex` wurde vom OAuth-Endpunkt abgewiesen; Werte unter 1000 wurden als
+ungültig abgewiesen. Diese Antworten sind account-/endpoint-spezifische
+Live-Evidenz und keine globale Default-Änderung.
+
+**H1-Ergebnis: PASS.** Der Probe-Request erzeugte verschlüsselte
+`response.output_item.done`-Items für Compaction und Reasoning, anschließend
+ein Message-Item und `response.completed`. Ein zweiter Request replayte das
+neueste Compaction-Fenster erfolgreich. Ein zusätzlicher stateful Canary-Turn
+veröffentlichte einen neuen Zustand (`generation=0`, `turn_count=1`) ohne
+Server-Conversation oder `previous_response_id`.
+
+Die Behebung umfasste den gemeinsamen Sync-/Async-Stream-Reducer sowie die
+Replay-Normalisierung von provider-only `created_by`-Feldern. Opaque Items
+bleiben im caller-owned Zustand vollständig erhalten; nur nicht zulässige
+Response-Metadaten werden für den nächsten Input entfernt. Die Offline-
+Regressionen hierfür bestehen mit `77 passed`.
+
+H1-PASS schließt keine Qualitäts- oder Kostenfreigabe für H2 ein. H2 bleibt bis
+zum kontrollierten Benchmark mit dem im nächsten Abschnitt beschriebenen
+Corpus und den harten Request-/TTL-/Kostenlimits offen.
+
+## Ausführungsprotokoll — OpenClaw und MCP, 2026-08-02
+
+Die OpenClaw-Prüfung lief ausschließlich in einem privaten, temporären
+Arbeitsbereich unter `/tmp/openviking-openclaw-pilot-6zQ66v` (Verzeichnisse
+`0700`, keine Host-Konfiguration). Verwendet wurde die mit Node `v24.11.0`
+kompatible, gepinnte CLI `openclaw 2026.5.27`; ein Upgrade auf die aktuellere,
+mit diesem Node nicht kompatible Version wurde nicht versucht.
+
+- Plugin `openviking 2026.6.18`: `typecheck` und `build` PASS.
+- Plugin-Linkinstallation, `setup --json` und `status --json` PASS; der
+  lokale OpenViking-Health-/User-Key-Probe meldete kompatibel auf `v0.4.11`.
+- Ein frischer Gateway-Prozess wurde nur temporär auf Loopback `127.0.0.1:18999`
+  mit Ephemeral-Token gestartet. Er meldete `ready`, initialisierte das Plugin
+  und `/health` antwortete HTTP 200. Der Prozess wurde anschließend sauber per
+  SIGINT beendet; der bestehende Dienst auf `127.0.0.1:1933` blieb unangetastet.
+- Die Legacy-Brüche wurden behoben: Recall-Kompatibilitätsfunktionen liegen
+  nur noch in der Registry, URI-Klassifikation nur noch im Routing, Setup-
+  Netzwerkzugriff nur noch im Probe-Service und ZIP-/Upload-I/O nur noch im
+  Resource-Packager. Im vollständigen temporären Repository-Baum sind damit
+  `44 Test Files, 729 Tests` PASS; `typecheck` und `build` sind ebenfalls PASS.
+- Die Manifestprüfung wurde im vollständigen Baum mit dem Repository-Icon
+  wiederholt. SHA-256 der gebauten Pilot-Artefakte: `dist/index.js`
+  `4e7a89cecb33a227335c6493a0031b6e41cdaae9cf0a99d85d2aa976efcf3c34`,
+  `dist/commands/setup.js`
+  `4465b2b0317c0ecd2faef5d8559d699f8b807260de40db803c4c138d888a6e38`,
+  `openclaw.plugin.json`
+  `0d94af38d72502963a86a9f15dcd2c645ea0d8ba34a4de9906b11835fed912a8`,
+  `package.json`
+  `cbb50444613105ccbd0705f3fd54c3a696490d6fae8d93ca51e8b315a7a08028`.
+
+Der echte MCP-Transportnachweis gegen `http://127.0.0.1:1933/mcp` ist
+vollständig:
+
+| Schritt | Ergebnis |
+|---|---|
+| `initialize` | HTTP 200, `text/event-stream`, Session-ID ausgestellt |
+| `notifications/initialized` | HTTP 202 |
+| `tools/list` | HTTP 200, 16 Werkzeuge, `health` vorhanden |
+| `tools/call health` | HTTP 200, ein Content-Block, `isError=false` |
+
+Es wurden keine mutierenden OpenClaw-/MCP-Werkzeuge, kein Provider-Agent-Call,
+kein `reset`, `install`, `restart`, `--force` oder Host-Service-Aufruf
+verwendet. Für den vollständigen OpenClaw-P0-Lauf fehlt weiterhin ausschließlich
+der explizit mutierende Agent-/Harness-Lauf mit einem freigegebenen Modell- und
+Kostenrahmen; die disposable Service-/Plugin-/MCP-Kette ist reproduzierbar PASS.
 
 ## H1 — Capability-Probe
 
@@ -139,5 +220,8 @@ Open-Item-Bericht aktualisiert. Ein daraus entstehender Änderungs-PR bleibt
 Draft, bis Review und alle Gates belegt sind; Aktivierung erfolgt nicht
 automatisch.
 
-Bis zu dieser Freigabe ist der aktuelle Fork-Stand offline abgeschlossen und
-die vier Live-Gates bleiben unverändert `HOLD / NOT RUN`.
+Nach der Ausführung sind H1 sowie der disposable OpenClaw-Service/MCP-
+Nachweis abgeschlossen. Der mutierende OpenClaw-P0-Harness, H2 und
+Provider-/Feishu-Live bleiben separat offen, bis ihre jeweiligen Artefakte und
+Stop-Kriterien erfüllt sind; sie werden nicht durch H1 oder den lokalen
+Health-Check automatisch freigegeben.

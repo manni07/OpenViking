@@ -114,6 +114,16 @@ def _completed_event(items: list[dict[str, Any]]) -> SimpleNamespace:
     return SimpleNamespace(type="response.completed", response=response)
 
 
+def _completed_event_without_output() -> SimpleNamespace:
+    """Model providers that publish output only through stream item events."""
+    response = SimpleNamespace(
+        status="completed",
+        output=[],
+        usage=SimpleNamespace(input_tokens=5, output_tokens=3, total_tokens=8),
+    )
+    return SimpleNamespace(type="response.completed", response=response)
+
+
 def _events(items: list[dict[str, Any]]) -> list[SimpleNamespace]:
     return [
         *[SimpleNamespace(type="response.output_item.done", item=item) for item in items],
@@ -306,6 +316,25 @@ def test_reasoning_and_unknown_opaque_fields_are_preserved_in_canonical_ledger()
         message,
     ]
     assert state.generation == 0
+
+
+def test_stream_item_events_fill_an_empty_completed_output_without_loss():
+    """State publication must retain reasoning, compaction, and message items from the stream."""
+    items = [_reasoning(), _compaction("stream-compaction"), _message("visible")]
+    events = [
+        *[SimpleNamespace(type="response.output_item.done", item=item) for item in items],
+        _completed_event_without_output(),
+    ]
+    client = FakeSyncClient([FakeSyncStream(events)])
+    adapter, _factory = _adapter(client)
+
+    turn = _turn(adapter, "initial")
+
+    assert _thaw(turn.state.response_items) == [
+        items[1],
+        items[2],
+    ]
+    assert turn.result.choices[0].message.content == "visible"
 
 
 def test_nested_response_items_are_deeply_immutable_and_defensively_copied():
@@ -774,6 +803,7 @@ def test_state_request_forces_store_false_and_forbids_server_managed_state():
     request = client.responses.calls[0]
     assert request["store"] is False
     assert request["stream"] is True
+    assert request["reasoning"] == {"effort": "low"}
     assert "conversation" not in request
     assert "previous_response_id" not in request
 
@@ -861,6 +891,37 @@ def test_capability_probe_requires_real_compaction_and_replay_before_enabling():
         call["context_management"] == [{"type": "compaction", "compact_threshold": 200_000}]
         for call in client.responses.calls
     )
+
+
+def test_capability_probe_reduces_stream_items_when_completed_payload_is_empty():
+    """Capability probing must inspect the same lossless stream reducer as state turns."""
+    compaction = {
+        **_compaction("probe-stream-compaction"),
+        "created_by": "provider-only-metadata",
+    }
+    first_items = [_reasoning("probe-reasoning"), compaction, _message("after")]
+    first_events = [
+        *[SimpleNamespace(type="response.output_item.done", item=item) for item in first_items],
+        _completed_event_without_output(),
+    ]
+    replay_items = [_message("replay completed")]
+    replay_events = [
+        *[SimpleNamespace(type="response.output_item.done", item=item) for item in replay_items],
+        _completed_event_without_output(),
+    ]
+    client = FakeSyncClient([FakeSyncStream(first_events), FakeSyncStream(replay_events)])
+    adapter, _factory = _adapter(client, compact_threshold=200_000)
+
+    adapter.probe_compaction_capability(
+        probe_input=[{"role": "user", "content": "sanitized long probe fixture"}]
+    )
+
+    assert adapter._has_compaction_capability() is True
+    assert client.responses.calls[1]["input"] == [
+        {key: value for key, value in compaction.items() if key != "created_by"},
+        _message("after"),
+        {"role": "user", "content": "Verify compaction replay."},
+    ]
 
 
 def test_capability_probe_without_compaction_fails_without_fallback_or_stamp():
